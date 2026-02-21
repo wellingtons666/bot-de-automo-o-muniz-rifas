@@ -1,21 +1,9 @@
 {
-  "name": "bot-whatsapp-mentions",
-  "version": "1.0.0",
-  "description": "Bot de menções automáticas para grupos WhatsApp",
-  "main": "src/index.js",
-  "scripts": {
-    "start": "node src/index.js"
-  },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.6.0",
+    "@vkazee/baileys": "^6.7.0",
+    "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
-    "qrcode": "^1.5.3",
-    "pino": "^8.17.0",
-    "pino-pretty": "^10.3.0",
-    "dotenv": "^16.3.1",
-    "axios": "^1.6.0"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "axios": "^1.6.0",
+    "pino": "^8.19.0"
   }
 }
