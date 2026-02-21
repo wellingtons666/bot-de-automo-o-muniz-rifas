@@ -9,80 +9,50 @@ const fs = require('fs');
 const http = require('http');
 const QRCode = require('qrcode');
 
-// Configurações globais
-let currentQR = null;
-let connectionStatus = 'Desconectado';
-let qrCodeData = null;
-let pairingCode = null;
-
-// === CONFIGURAÇÃO DE EVASÃO ===
+// ============== CONFIGURAÇÃO DE EVASÃO ==============
 const DEVICE_CONFIGS = [
-    { name: 'Samsung Galaxy S23', os: 'Android 13', version: [2, 24, 6] },
-    { name: 'Samsung Galaxy S22', os: 'Android 12', version: [2, 23, 14] },
-    { name: 'Xiaomi 13 Pro', os: 'Android 13', version: [2, 24, 6] },
-    { name: 'iPhone 14 Pro', os: 'iOS 16', version: [2, 23, 12] }
+    { name: 'Samsung Galaxy S23 Ultra', os: 'Android 14', version: [2, 3000, 1015901307] },
+    { name: 'Samsung Galaxy S22', os: 'Android 13', version: [2, 3000, 1015901307] },
+    { name: 'Xiaomi 13 Pro', os: 'Android 13', version: [2, 3000, 1015901307] },
+    { name: 'iPhone 15 Pro', os: 'iOS 17', version: [2, 3000, 1015901307] }
 ];
 
 function getRandomDevice() {
     return DEVICE_CONFIGS[Math.floor(Math.random() * DEVICE_CONFIGS.length)];
 }
 
-function generateBrowserFingerprint() {
+function generateDeviceIdentity() {
     const device = getRandomDevice();
-    const chromeVersion = Math.floor(Math.random() * 30) + 110; // 110-140
-    
     return {
         deviceName: device.name,
         osVersion: device.os,
-        browserVersion: `Chrome/${chromeVersion}.0.${Math.floor(Math.random() * 5000)}.${Math.floor(Math.random() * 100)}`,
+        browserVersion: `Chrome/${Math.floor(Math.random() * 30) + 120}.0.${Math.floor(Math.random() * 5000)}.${Math.floor(Math.random() * 100)}`,
         waVersion: device.version,
         deviceId: crypto.randomBytes(16).toString('hex')
     };
 }
 
-// Limpa sessão de forma agressiva
-function cleanSession() {
-    const authPath = path.join(process.cwd(), 'auth_info');
-    const sessionPaths = [
-        authPath,
-        path.join(process.cwd(), 'baileys_auth'),
-        path.join(process.cwd(), 'session'),
-        '/tmp/puppeteer_dev_chrome_profile-*'
-    ];
-    
-    sessionPaths.forEach(p => {
-        try {
-            if (fs.existsSync(p)) {
-                fs.rmSync(p, { recursive: true, force: true });
-                console.log(`🧹 Limpado: ${p}`);
-            }
-        } catch (e) {
-            // ignora erros
-        }
-    });
-    
-    // Recria diretório limpo
-    fs.mkdirSync(authPath, { recursive: true });
-    return authPath;
-}
+// ============== SERVIDOR WEB (OBRIGATÓRIO RAILWAY) ==============
+let connectionStatus = 'Iniciando...';
+let qrCodeData = null;
+let pairingCode = null;
 
-// Servidor web
 const server = http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     
     if (req.url === '/') {
         res.writeHead(200, { 
             'Content-Type': 'text/html; charset=utf-8',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
+            'Cache-Control': 'no-cache'
         });
         res.end(`
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Bot WhatsApp - MUNIIZ RIFAS</title>
+                <title>MUNIIZ RIFAS - Bot WhatsApp</title>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta http-equiv="refresh" content="3">
+                <meta http-equiv="refresh" content="5">
                 <style>
                     body {
                         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -150,20 +120,15 @@ const server = http.createServer((req, res) => {
                     }
                     .info { margin-top: 20px; color: #f0f0f0; font-size: 14px; line-height: 1.8; }
                     .loading { font-size: 18px; color: #666; padding: 30px; }
-                    .warning { background: #ffa502; color: #333; padding: 15px; border-radius: 10px; margin-bottom: 20px; font-weight: bold; }
-                    .error-box { background: #ff4757; color: white; padding: 15px; border-radius: 10px; margin: 20px 0; }
                     .device-info { background: rgba(255,255,255,0.2); padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px; }
                 </style>
             </head>
             <body>
                 <div class="container">
-                    <h1>🤖 MUNIIZ RIFAS - WhatsApp Bot</h1>
+                    <h1>🤖 MUNIIZ RIFAS</h1>
                     
                     ${connectionStatus === 'Erro 405' ? 
-                        '<div class="error-box">⚠️ Erro de Conexão 405<br>Tentando nova identidade...</div>' : ''}
-                    
-                    ${!qrCodeData && !pairingCode && connectionStatus !== 'Conectado' && connectionStatus !== 'Erro 405' ? 
-                        '<div class="warning">⚡ Inicializando...</div>' : ''}
+                        '<div class="error-box">⚠️ Erro de Conexão 405<br>Gerando nova identidade...</div>' : ''}
                     
                     <div class="status ${connectionStatus === 'Conectado' ? 'conectado' : connectionStatus === 'Aguardando QR' ? 'aguardando' : connectionStatus === 'Erro 405' ? 'erro' : 'desconectado'}">
                         ${connectionStatus}
@@ -181,7 +146,7 @@ const server = http.createServer((req, res) => {
                         ${qrCodeData ? 
                             `<img src="${qrCodeData}" alt="QR Code">` : 
                             `<div class="loading">
-                                ${pairingCode ? '⏳ Aguardando conexão...' : connectionStatus === 'Erro 405' ? '♻️ Reiniciando...' : '⏳ Gerando QR...'}
+                                ${pairingCode ? '⏳ Aguardando conexão...' : connectionStatus === 'Erro 405' ? '♻️ Reiniciando...' : '⏳ Inicializando...'}
                             </div>`
                         }
                     </div>
@@ -208,132 +173,124 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`🌐 Servidor web: http://0.0.0.0:${PORT}`);
 });
 
+// ============== LIMPEZA DE SESSÃO ==============
+function cleanSession() {
+    const authPath = path.join(process.cwd(), 'auth_info');
+    const pathsToClean = [
+        authPath,
+        path.join(process.cwd(), 'baileys_auth'),
+        path.join(process.cwd(), 'session'),
+        '/tmp/puppeteer_dev_chrome_profile-*'
+    ];
+    
+    pathsToClean.forEach(p => {
+        try {
+            if (fs.existsSync(p)) {
+                fs.rmSync(p, { recursive: true, force: true });
+            }
+        } catch (e) {}
+    });
+    
+    fs.mkdirSync(authPath, { recursive: true });
+    return authPath;
+}
+
+// ============== BOT PRINCIPAL ==============
+const config = require('./config/index.js');
+const MessageHandler = require('./handlers/messageHandler.js');
+const logger = require('./utils/logger.js');
+
 class WhatsAppBot {
     constructor() {
         this.sock = null;
         this.messageHandler = null;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 20;
-        this.deviceIdentity = generateBrowserFingerprint();
+        this.deviceIdentity = generateDeviceIdentity();
         this.authPath = cleanSession();
     }
 
     async start() {
         try {
-            // Limpa sessão a cada tentativa para evitar lock
             if (this.reconnectAttempts > 0) {
                 console.log('🧹 Limpando sessão anterior...');
                 this.authPath = cleanSession();
-                // Gera nova identidade a cada erro 405
-                this.deviceIdentity = generateBrowserFingerprint();
+                this.deviceIdentity = generateDeviceIdentity();
                 await new Promise(r => setTimeout(r, 5000));
             }
 
             console.log(`🤖 Iniciando MUNIIZ RIFAS Bot...`);
             console.log(`📱 Dispositivo: ${this.deviceIdentity.deviceName}`);
-            console.log(`🆔 ID: ${this.deviceIdentity.deviceId.substring(0, 8)}...`);
 
-            // Busca versão mais recente do WhatsApp Web
             let version = this.deviceIdentity.waVersion;
             try {
                 const { version: latestVersion } = await fetchLatestBaileysVersion();
                 version = latestVersion || version;
                 console.log(`📦 Versão WA: ${version.join('.')}`);
             } catch (e) {
-                console.log(`📦 Usando versão fallback: ${version.join('.')}`);
+                console.log(`📦 Usando versão: ${version.join('.')}`);
             }
 
             const { state, saveCreds } = await useMultiFileAuthState(this.authPath);
 
-            // Configuração "stealth" avançada
             this.sock = makeWASocket({
                 auth: state,
                 printQRInTerminal: false,
-                logger: { 
-                    level: 'silent',
-                    trace: () => {},
-                    debug: () => {},
-                    info: () => {},
-                    warn: () => {},
-                    error: () => {},
-                    fatal: () => {}
-                },
-                
-                // Identidade móvel realista
+                logger: { level: 'silent' },
                 browser: [this.deviceIdentity.deviceName, this.deviceIdentity.osVersion, this.deviceIdentity.browserVersion],
-                
-                // Versão do protocolo
                 version: version,
-                
-                // Timeouts
                 connectTimeoutMs: 120000,
                 defaultQueryTimeoutMs: 60000,
                 keepAliveIntervalMs: 30000,
-                
-                // Comportamento humano
                 markOnlineOnConnect: false,
                 syncFullHistory: false,
                 shouldSyncHistoryMessage: () => false,
                 shouldIgnoreJid: () => false,
-                
-                // Configurações avançadas
                 emitOwnEvents: true,
                 fireInitQueries: true,
                 downloadHistory: false,
-                
-                // Patch de mensagens
-                patchMessageBeforeSending: (msg) => {
-                    // Adiciona delay aleatório para parecer humano
-                    return new Promise(resolve => {
-                        setTimeout(() => resolve(msg), Math.random() * 1000);
-                    });
-                },
-                
+                patchMessageBeforeSending: (msg) => msg,
                 getMessage: async () => undefined,
-                
-                // Opções extras de conexão
                 retryRequestDelayMs: 5000,
                 maxMsgRetryCount: 5,
                 msgRetryCounterMap: new Map(),
-                
-                // Ignora algumas verificações
                 ignoreBroadcast: true,
                 ignoreGroupMessages: false,
             });
 
-            // Tenta código de pareamento primeiro
+            this.messageHandler = new MessageHandler(this.sock);
+
+            // Código de pareamento
             if (!state.creds.registered && !state.creds.me) {
                 console.log('📱 Solicitando código de pareamento...');
                 try {
                     await new Promise(r => setTimeout(r, 5000));
-                    
-                    const phoneNumber = '5571988140188'; // Seu número
+                    const phoneNumber = config.ADMIN_NUMBER;
                     const code = await this.sock.requestPairingCode(phoneNumber);
                     
                     if (code) {
                         pairingCode = code;
                         connectionStatus = 'Aguardando QR';
-                        console.log(`🔢 Código gerado: ${code}`);
+                        console.log(`🔢 Código: ${code}`);
                     }
                 } catch (err) {
-                    console.log('⚠️ Código falhou, aguardando QR Code...');
+                    console.log('⚠️ Código falhou, aguardando QR...');
                     pairingCode = null;
                 }
             }
 
-            // Handler de conexão
+            // Eventos de conexão
             this.sock.ev.on('connection.update', async (update) => {
                 const { connection, lastDisconnect, qr } = update;
 
                 if (qr && !pairingCode) {
                     try {
                         qrCodeData = await QRCode.toDataURL(qr);
-                        currentQR = qr;
                         connectionStatus = 'Aguardando QR';
                         console.log('📱 QR Code gerado!');
                         qrcode.generate(qr, { small: true });
                     } catch (err) {
-                        console.error('Erro ao gerar QR:', err.message);
+                        console.error('Erro QR:', err.message);
                     }
                 }
 
@@ -345,106 +302,86 @@ class WhatsAppBot {
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
                     const reason = lastDisconnect?.error?.output?.payload?.message;
                     
-                    console.log(`❌ Conexão fechada. Status: ${statusCode}, Razão: ${reason}`);
+                    console.log(`❌ Conexão fechada. Status: ${statusCode}`);
                     
-                    // Erro 405 - Muda identidade completamente
-                    if (statusCode === 405 || statusCode === DisconnectReason.connectionLost) {
+                    // Erro 405 - Troca identidade completamente
+                    if (statusCode === 405) {
                         connectionStatus = 'Erro 405';
-                        console.log('🔄 Erro 405 detectado! Gerando nova identidade...');
-                        
-                        // Limpa tudo
+                        console.log('🔄 Erro 405! Nova identidade em 10s...');
                         cleanSession();
-                        this.deviceIdentity = generateBrowserFingerprint();
+                        this.deviceIdentity = generateDeviceIdentity();
                         this.reconnectAttempts++;
-                        
-                        const delay = Math.min(this.reconnectAttempts * 10000, 60000);
-                        console.log(`⏳ Aguardando ${delay/1000}s antes de reconectar...`);
-                        
-                        setTimeout(() => this.start(), delay);
+                        setTimeout(() => this.start(), 10000);
                         return;
                     }
                     
                     // Logout ou ban
                     if (statusCode === DisconnectReason.loggedOut || statusCode === DisconnectReason.forbidden) {
-                        console.log('🚫 Sessão encerrada ou banida. Limpando...');
+                        console.log('🚫 Sessão encerrada. Limpando...');
                         cleanSession();
                         this.reconnectAttempts = 0;
                         setTimeout(() => this.start(), 30000);
                         return;
                     }
                     
-                    // Outros erros
+                    // Reconexão normal
                     if (this.reconnectAttempts < this.maxReconnectAttempts) {
                         this.reconnectAttempts++;
                         const delay = Math.min(this.reconnectAttempts * 5000, 30000);
                         console.log(`🔄 Reconectando em ${delay/1000}s... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
                         setTimeout(() => this.start(), delay);
                     } else {
-                        console.error('❌ Máximo de tentativas atingido. Resetando...');
+                        console.error('❌ Máximo de tentativas. Resetando...');
                         this.reconnectAttempts = 0;
                         cleanSession();
-                        setTimeout(() => this.start(), 120000);
+                        setTimeout(() => this.start(), 60000);
                     }
                 }
 
                 if (connection === 'open') {
-                    currentQR = null;
                     qrCodeData = null;
                     pairingCode = null;
                     connectionStatus = 'Conectado';
                     this.reconnectAttempts = 0;
-                    console.log('✅ CONECTADO COM SUCESSO!');
-                    console.log(`📱 Usuário: ${this.sock.user?.id || 'N/A'}`);
+                    console.log('✅ CONECTADO!');
                 }
             });
 
             this.sock.ev.on('creds.update', saveCreds);
             
-            // Handler de mensagens
             this.sock.ev.on('messages.upsert', async ({ messages, type }) => {
                 if (type === 'notify') {
                     for (const msg of messages) {
-                        try {
-                            // Ignora mensagens do próprio bot
-                            if (msg.key.fromMe) continue;
-                            
-                            // Simula digitação para parecer humano
-                            await this.sock.sendPresenceUpdate('composing', msg.key.remoteJid);
-                            await new Promise(r => setTimeout(r, 1000 + Math.random() * 2000));
-                            await this.sock.sendPresenceUpdate('paused', msg.key.remoteJid);
-                            
-                            // Processa mensagem
-                            if (this.messageHandler) {
-                                await this.messageHandler.handle(msg);
-                            }
-                        } catch (err) {
-                            console.error('Erro ao processar mensagem:', err.message);
+                        if (msg.key.fromMe) continue;
+                        await this.sock.sendPresenceUpdate('composing', msg.key.remoteJid);
+                        await new Promise(r => setTimeout(r, 1000 + Math.random() * 2000));
+                        await this.sock.sendPresenceUpdate('paused', msg.key.remoteJid);
+                        
+                        if (this.messageHandler) {
+                            await this.messageHandler.handle(msg);
                         }
                     }
                 }
             });
 
         } catch (error) {
-            console.error('💥 Erro fatal:', error.message);
-            connectionStatus = 'Erro';
+            console.error('💥 Erro:', error.message);
             setTimeout(() => this.start(), 30000);
         }
     }
 }
 
-// Inicia o bot
 const bot = new WhatsAppBot();
 bot.start();
 
-// Graceful shutdown
 process.on('SIGTERM', () => {
-    console.log('🛑 SIGTERM recebido, limpando...');
+    console.log('🛑 Encerrando...');
     cleanSession();
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
-    console.log('🛑 SIGINT recebido, limpando...');
+    console.log('🛑 Encerrando...');
     cleanSession();
     process.exit(0);
 });
