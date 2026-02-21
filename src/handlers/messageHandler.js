@@ -16,7 +16,7 @@ class MessageHandler {
 
             const chatId = msg.key.remoteJid;
             const sender = msg.key.participant || msg.key.remoteJid;
-
+            
             // Só processa grupos
             if (!chatId.endsWith('@g.us')) return;
 
@@ -29,7 +29,7 @@ class MessageHandler {
             }
 
             text = text.toLowerCase().trim();
-
+            
             // Verifica comando "uau"
             if (text === config.TRIGGER_COMMAND) {
                 await this.handleUauCommand(chatId, sender, msg);
@@ -51,23 +51,13 @@ class MessageHandler {
             return;
         }
 
-        // Verifica cooldown
-        const cooldownCheck = security.checkCooldown(chatId);
-        if (!cooldownCheck.allowed) {
-            await this.sock.sendMessage(chatId, {
-                text: config.MESSAGES.COOLDOWN_ACTIVE(cooldownCheck.remainingTime),
-                quoted: msg
-            });
-            return;
-        }
-
         // Envia confirmação
         await this.sock.sendMessage(chatId, {
-            text: '🚀 Iniciando menção segura...',
+            text: '🚀 Iniciando menção manual...',
             quoted: msg
         });
 
-        // Executa menção
+        // Executa menção (manual = sem cooldown)
         const result = await this.mentionService.sendMention(chatId, false);
 
         if (result.success) {
@@ -79,7 +69,7 @@ class MessageHandler {
             if (!security.isAutoMentionEnabled(chatId)) {
                 this.mentionService.startAutoMention(chatId);
                 await this.sock.sendMessage(chatId, {
-                    text: config.MESSAGES.AUTO_MENTION_ENABLED + `\n⏱️ Intervalo: ${config.AUTO_MENTION_INTERVAL / 60000} minutos`
+                    text: config.MESSAGES.AUTO_MENTION_ENABLED + `\n⏱️ Intervalo: 3-6 minutos (aleatório)`
                 });
             }
         } else {
