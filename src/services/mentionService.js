@@ -77,7 +77,6 @@ class MentionService {
     startAutoMention(groupId) {
         security.enableAutoMention(groupId);
         
-        // Usa o intervalo aleatório corrigido
         const interval = config.getAutoMentionInterval();
         logger.info(`Próxima menção automática em ${interval/60000} minutos`);
 
