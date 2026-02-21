@@ -1,6 +1,5 @@
 FROM node:18-slim
 
-# Instala Chrome e dependências
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     fonts-ipafont-gothic \
@@ -25,7 +24,6 @@ RUN npm ci --only=production && npm cache clean --force
 
 COPY . .
 
-# Cria diretórios necessários
 RUN mkdir -p auth_info logs
 
 EXPOSE 8080
