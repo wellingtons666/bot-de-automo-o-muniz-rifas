@@ -14,8 +14,11 @@ class SecurityManager {
         return cleanNumber === config.ADMIN_NUMBER;
     }
 
-    // Verifica cooldown
-    checkCooldown(groupId) {
+    // Verifica cooldown (apenas para automático)
+    checkCooldown(groupId, isAuto = false) {
+        // Se for manual, não tem cooldown
+        if (!isAuto) return { allowed: true, remainingTime: 0 };
+        
         const now = Date.now();
         const history = this.mentionHistory.get(groupId);
 
@@ -42,17 +45,21 @@ class SecurityManager {
     }
 
     // Registra nova menção
-    registerMention(groupId) {
+    registerMention(groupId, isAuto = false) {
         const now = Date.now();
         const history = this.mentionHistory.get(groupId) || { count: 0, lastMention: 0 };
 
         history.count++;
         history.lastMention = now;
-        history.cooldownEnd = now + (config.COOLDOWN_MINUTES * 60000);
+        
+        // Só aplica cooldown se for automático
+        if (isAuto) {
+            history.cooldownEnd = now + (config.COOLDOWN_MINUTES * 60000);
+        }
 
         this.mentionHistory.set(groupId, history);
-
-        logger.info(`Menção registrada para grupo ${groupId}. Total: ${history.count}`);
+        
+        logger.info(`Menção ${isAuto ? 'automática' : 'manual'} registrada para grupo ${groupId}. Total: ${history.count}`);
     }
 
     // Adiciona grupo às menções automáticas
@@ -64,18 +71,4 @@ class SecurityManager {
     // Remove grupo das menções automáticas
     disableAutoMention(groupId) {
         this.autoMentionGroups.delete(groupId);
-        logger.info(`Menções automáticas desativadas para grupo: ${groupId}`);
-    }
-
-    // Verifica se tem menção automática ativa
-    isAutoMentionEnabled(groupId) {
-        return this.autoMentionGroups.has(groupId);
-    }
-
-    // Lista grupos com auto-menção
-    getAutoMentionGroups() {
-        return Array.from(this.autoMentionGroups);
-    }
-}
-
-module.exports = new SecurityManager();
+        logger.info(`Menções automáticas des
