@@ -1,3 +1,7 @@
+// Adicionar no topo do arquivo, antes de tudo
+const crypto = require('crypto');
+global.crypto = crypto;
+
 const makeWASocket = require('@whiskeysockets/baileys').default;
 const { useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
@@ -21,7 +25,7 @@ const server = http.createServer((req, res) => {
                 <title>Bot WhatsApp - QR Code</title>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta http-equiv="refresh" content="10">
+                <meta http-equiv="refresh" content="5">
                 <style>
                     body {
                         font-family: Arial, sans-serif;
@@ -73,10 +77,6 @@ const server = http.createServer((req, res) => {
                         font-size: 18px;
                         color: #666;
                     }
-                    .error {
-                        color: #ff4757;
-                        font-weight: bold;
-                    }
                 </style>
             </head>
             <body>
@@ -86,16 +86,16 @@ const server = http.createServer((req, res) => {
                         Status: ${connectionStatus}
                     </div>
                     <div id="qrcode">
-                        ${qrCodeData ? `<img src="${qrCodeData}" alt="QR Code">` : '<div class="loading">⏳ Aguardando QR Code...<br><br>Recarregue a página em alguns segundos</div>'}
+                        ${qrCodeData ? `<img src="${qrCodeData}" alt="QR Code">` : '<div class="loading">⏳ Aguardando QR Code...<br><br>Recarregue a página</div>'}
                     </div>
                     <div class="info">
                         <p>📱 <strong>Como conectar:</strong></p>
                         <p>1. Abra o WhatsApp no celular</p>
-                        <p>2. Toque em ⋮ (menu) → Dispositivos Conectados</p>
+                        <p>2. Toque em ⋮ → Dispositivos Conectados</p>
                         <p>3. Toque em "Conectar novo dispositivo"</p>
-                        <p>4. Aponte a câmera para o QR Code acima</p>
+                        <p>4. Aponte a câmera para o QR Code</p>
                         <br>
-                        <p>⏱️ Página atualiza automaticamente a cada 10 segundos</p>
+                        <p>⏱️ Página atualiza automaticamente a cada 5 segundos</p>
                     </div>
                 </div>
             </body>
@@ -110,7 +110,6 @@ const server = http.createServer((req, res) => {
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🌐 Servidor web rodando na porta ${PORT}`);
-    console.log(`🔗 URL: http://localhost:${PORT}`);
 });
 
 // Garante que o diretório auth_info existe
@@ -122,8 +121,6 @@ if (!fs.existsSync(authPath)) {
 const config = require('./config/index.js');
 const MessageHandler = require('./handlers/messageHandler.js');
 const logger = require('./utils/logger.js');
-
-// Importa qrcode para gerar imagem
 const QRCode = require('qrcode');
 
 class WhatsAppBot {
@@ -156,7 +153,6 @@ class WhatsAppBot {
             this.sock.ev.on('connection.update', async (update) => {
                 const { connection, lastDisconnect, qr } = update;
 
-                // Se recebeu QR Code, gera imagem imediatamente
                 if (qr) {
                     try {
                         qrCodeData = await QRCode.toDataURL(qr);
