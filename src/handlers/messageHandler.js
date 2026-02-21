@@ -68,7 +68,6 @@ class MessageHandler {
 
             if (!security.isAutoMentionEnabled(chatId)) {
                 this.mentionService.startAutoMention(chatId);
-                // CORRIGIDO: Usa o intervalo calculado
                 const intervalMin = Math.round(config.getAutoMentionInterval() / 60000);
                 await this.sock.sendMessage(chatId, {
                     text: `${config.MESSAGES.AUTO_MENTION_ENABLED}\n⏱️ Intervalo: ~${intervalMin} minutos`
