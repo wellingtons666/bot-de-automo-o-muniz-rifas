@@ -1,15 +1,20 @@
 const pino = require('pino');
 
 const logger = pino({
-    level: 'info',
+    level: process.env.LOG_LEVEL || 'info',
     transport: {
         target: 'pino-pretty',
         options: {
             colorize: true,
-            translateTime: 'SYS:standard',
-            ignore: 'pid,hostname'
-        }
-    }
+            translateTime: 'HH:MM:ss Z',
+            ignore: 'pid,hostname',
+        },
+    },
 });
+
+// Adiciona método child se não existir (compatibilidade)
+if (!logger.child) {
+    logger.child = () => logger;
+}
 
 module.exports = logger;
