@@ -1,7 +1,7 @@
-const config = require('../config');
-const security = require('../utils/security');
-const MentionService = require('../services/mentionService');
-const logger = require('../utils/logger');
+const config = require('../config/index.js');
+const security = require('../utils/security.js');
+const MentionService = require('../services/mentionService.js');
+const logger = require('../utils/logger.js');
 
 class MessageHandler {
     constructor(sock) {
