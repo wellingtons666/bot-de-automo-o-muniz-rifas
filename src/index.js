@@ -112,6 +112,7 @@ const server = http.createServer((req, res) => {
                     .info { margin-top: 20px; color: #f0f0f0; font-size: 14px; line-height: 1.8; }
                     .loading { font-size: 18px; color: #666; padding: 30px; }
                     .error-box { background: #ff4757; color: white; padding: 15px; border-radius: 10px; margin: 20px 0; font-size: 14px; }
+                    .success-box { background: #00d26a; color: white; padding: 15px; border-radius: 10px; margin: 20px 0; font-size: 14px; }
                 </style>
             </head>
             <body>
@@ -119,7 +120,10 @@ const server = http.createServer((req, res) => {
                     <h1>🤖 MUNIIZ RIFAS</h1>
                     
                     ${connectionStatus === 'Erro 515' ? 
-                        '<div class="error-box">⚠️ Erro 515: Usando QR Code...</div>' : ''}
+                        '<div class="error-box">⚠️ Erro 515: Tentando novamente em 30s...</div>' : ''}
+                    
+                    ${connectionStatus === 'Conectado' ? 
+                        '<div class="success-box">✅ Bot conectado! Pronto para usar.</div>' : ''}
                     
                     <div class="status ${connectionStatus === 'Conectado' ? 'conectado' : connectionStatus === 'Aguardando QR' ? 'aguardando' : connectionStatus === 'Erro 515' ? 'erro' : 'desconectado'}">
                         ${connectionStatus}
@@ -241,14 +245,11 @@ class WhatsAppBot {
 
             this.messageHandler = new MessageHandler(this.sock);
 
-            // NÃO USA MAIS CÓDIGO DE PAREAMENTO - APENAS QR CODE
-
             this.sock.ev.on('connection.update', async (update) => {
                 const { connection, lastDisconnect, qr } = update;
                 
                 console.log(`🔄 Status: ${connection || 'N/A'}`);
 
-                // Gera QR Code imediatamente
                 if (qr) {
                     try {
                         console.log('📱 Gerando QR Code...');
@@ -257,7 +258,6 @@ class WhatsAppBot {
                         console.log('✅ QR Code gerado! Escaneie em 45 segundos.');
                         qrcode.generate(qr, { small: true });
                         
-                        // QR Code expira em 45 segundos
                         setTimeout(() => {
                             if (connectionStatus !== 'Conectado') {
                                 console.log('⏳ QR Code expirado, gerando novo...');
@@ -276,19 +276,25 @@ class WhatsAppBot {
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
                     console.log(`❌ Conexão fechada. Código: ${statusCode}`);
                     
-                    // Erro 515 - Autenticação falhou
                     if (statusCode === 515) {
                         connectionStatus = 'Erro 515';
                         console.log('🚫 ERRO 515: Autenticação falhou.');
-                        console.log('🔄 Tentando com nova identidade em 10s...');
+                        
+                        if (this.reconnectAttempts > 5) {
+                            console.log('⏸️ Muitas tentativas. Aguardando 5 minutos...');
+                            this.reconnectAttempts = 0;
+                            setTimeout(() => this.start(), 300000);
+                            return;
+                        }
+                        
+                        console.log('🔄 Tentando com nova identidade em 30s...');
                         cleanSession();
                         this.deviceIdentity = generateDeviceIdentity();
                         this.reconnectAttempts++;
-                        setTimeout(() => this.start(), 10000);
+                        setTimeout(() => this.start(), 30000);
                         return;
                     }
                     
-                    // Erro 405 - Bloqueio
                     if (statusCode === 405) {
                         connectionStatus = 'Erro 405';
                         console.log('🚫 ERRO 405: Bloqueado pelo WhatsApp.');
@@ -299,7 +305,6 @@ class WhatsAppBot {
                         return;
                     }
                     
-                    // Logout
                     if (statusCode === DisconnectReason.loggedOut) {
                         console.log('🚫 Logout detectado. Limpando...');
                         cleanSession();
@@ -308,7 +313,6 @@ class WhatsAppBot {
                         return;
                     }
                     
-                    // Reconexão
                     if (this.reconnectAttempts < this.maxReconnectAttempts) {
                         this.reconnectAttempts++;
                         const delay = Math.min(this.reconnectAttempts * 5000, 30000);
