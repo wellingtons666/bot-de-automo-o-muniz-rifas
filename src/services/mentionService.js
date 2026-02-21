@@ -1,6 +1,6 @@
-const config = require('../config');
-const security = require('../utils/security');
-const logger = require('../utils/logger');
+const config = require('../config/index.js');
+const security = require('../utils/security.js');
+const logger = require('../utils/logger.js');
 
 class MentionService {
     constructor(sock) {
