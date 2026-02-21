@@ -8,11 +8,7 @@
       "package-lock.json",
       "Dockerfile",
       "railway.json",
-      "index.js",
-      "prestart.js",
-      "config/**",
-      "handlers/**",
-      "utils/**"
+      "src/**/*.js"
     ]
   },
   "deploy": {
@@ -23,20 +19,6 @@
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 15,
     "numReplicas": 1,
-    "sleepApplication": false,
-    "multiRegionConfig": {
-      "default": {
-        "numReplicas": 1
-      }
-    }
-  },
-  "environments": {
-    "production": {
-      "deploy": {
-        "startCommand": "npm start",
-        "healthcheckTimeout": 150,
-        "restartPolicyMaxRetries": 20
-      }
-    }
+    "sleepApplication": false
   }
 }
