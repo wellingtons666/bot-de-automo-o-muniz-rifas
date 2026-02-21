@@ -2,10 +2,17 @@ const makeWASocket = require('@whiskeysockets/baileys').default;
 const { useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const path = require('path');
+const fs = require('fs');
 
-const config = require('./config');
-const MessageHandler = require('./handlers/messageHandler');
-const logger = require('./utils/logger');
+// Garante que o diretório auth_info existe
+const authPath = path.join(process.cwd(), 'auth_info');
+if (!fs.existsSync(authPath)) {
+    fs.mkdirSync(authPath, { recursive: true });
+}
+
+const config = require('./config/index.js');
+const MessageHandler = require('./handlers/messageHandler.js');
+const logger = require('./utils/logger.js');
 
 class WhatsAppBot {
     constructor() {
@@ -21,7 +28,6 @@ class WhatsAppBot {
             logger.info(`👑 Admin configurado: ${config.ADMIN_NUMBER}`);
 
             // Configuração de autenticação
-            const authPath = path.join(__dirname, '..', 'auth_info');
             const { state, saveCreds } = await useMultiFileAuthState(authPath);
 
             // Cria conexão
