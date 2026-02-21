@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxss1 \
     ca-certificates \
     curl \
+    git \  # <-- ADICIONADO AQUI
     && rm -rf /var/lib/apt/lists/*
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
@@ -19,7 +20,6 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 
 WORKDIR /app
 
-# MUDANÇA AQUI: npm install em vez de npm ci
 COPY package*.json ./
 RUN npm install --production && npm cache clean --force
 
