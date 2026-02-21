@@ -1,4 +1,3 @@
-// Adicionar no topo do arquivo, antes de tudo
 const crypto = require('crypto');
 global.crypto = crypto;
 
@@ -14,10 +13,18 @@ let currentQR = null;
 let connectionStatus = 'Desconectado';
 let qrCodeData = null;
 
-// Servidor web para exibir QR Code
+// Servidor web para exibir QR Code - CONFIGURADO PARA RAILWAY
 const server = http.createServer((req, res) => {
+    // CORS headers para permitir acesso de qualquer origem
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
     if (req.url === '/') {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.writeHead(200, { 
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+        });
         res.end(`
             <!DOCTYPE html>
             <html>
@@ -25,7 +32,7 @@ const server = http.createServer((req, res) => {
                 <title>Bot WhatsApp - QR Code</title>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta http-equiv="refresh" content="5">
+                <meta http-equiv="refresh" content="2">
                 <style>
                     body {
                         font-family: Arial, sans-serif;
@@ -41,14 +48,15 @@ const server = http.createServer((req, res) => {
                     .container {
                         text-align: center;
                         padding: 20px;
+                        max-width: 500px;
                     }
-                    h1 { color: #00d9ff; margin-bottom: 10px; }
+                    h1 { color: #00d9ff; margin-bottom: 10px; font-size: 24px; }
                     .status {
                         padding: 15px 30px;
                         border-radius: 25px;
                         margin: 20px 0;
                         font-weight: bold;
-                        font-size: 18px;
+                        font-size: 16px;
                     }
                     .status.conectado { background: #00d9ff; color: #1a1a2e; }
                     .status.desconectado { background: #ff4757; }
@@ -57,15 +65,17 @@ const server = http.createServer((req, res) => {
                         background: white;
                         padding: 20px;
                         border-radius: 15px;
-                        margin: 20px 0;
-                        min-height: 300px;
+                        margin: 20px auto;
+                        width: 300px;
+                        height: 300px;
                         display: flex;
                         align-items: center;
                         justify-content: center;
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
                     }
                     #qrcode img {
-                        max-width: 300px;
-                        border-radius: 10px;
+                        max-width: 260px;
+                        max-height: 260px;
                     }
                     .info {
                         margin-top: 20px;
@@ -74,19 +84,39 @@ const server = http.createServer((req, res) => {
                         line-height: 1.6;
                     }
                     .loading {
-                        font-size: 18px;
+                        font-size: 16px;
                         color: #666;
+                        text-align: center;
+                    }
+                    .warning {
+                        background: #ffa502;
+                        color: #1a1a2e;
+                        padding: 10px;
+                        border-radius: 10px;
+                        margin-bottom: 20px;
+                        font-weight: bold;
+                        font-size: 14px;
+                    }
+                    .url-info {
+                        background: #2f3542;
+                        padding: 10px;
+                        border-radius: 8px;
+                        margin-top: 15px;
+                        font-size: 12px;
+                        color: #70a1ff;
+                        word-break: break-all;
                     }
                 </style>
             </head>
             <body>
                 <div class="container">
                     <h1>🤖 Bot WhatsApp - Menções</h1>
+                    ${!qrCodeData && connectionStatus !== 'Conectado' ? '<div class="warning">⚠️ Aguardando QR Code...</div>' : ''}
                     <div class="status ${connectionStatus === 'Conectado' ? 'conectado' : connectionStatus === 'Aguardando QR' ? 'aguardando' : 'desconectado'}">
                         Status: ${connectionStatus}
                     </div>
                     <div id="qrcode">
-                        ${qrCodeData ? `<img src="${qrCodeData}" alt="QR Code">` : '<div class="loading">⏳ Aguardando QR Code...<br><br>Recarregue a página</div>'}
+                        ${qrCodeData ? `<img src="${qrCodeData}" alt="QR Code WhatsApp">` : '<div class="loading">⏳ Gerando QR Code...<br>Aguarde...</div>'}
                     </div>
                     <div class="info">
                         <p>📱 <strong>Como conectar:</strong></p>
@@ -95,28 +125,50 @@ const server = http.createServer((req, res) => {
                         <p>3. Toque em "Conectar novo dispositivo"</p>
                         <p>4. Aponte a câmera para o QR Code</p>
                         <br>
-                        <p>⏱️ Página atualiza automaticamente a cada 5 segundos</p>
+                        <p>⏱️ Atualizando a cada 2 segundos</p>
+                    </div>
+                    <div class="url-info">
+                        🌐 ${req.headers.host || 'localhost'}
                     </div>
                 </div>
             </body>
             </html>
         `);
+    } else if (req.url === '/status') {
+        // Endpoint JSON para verificar status
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            status: connectionStatus,
+            hasQR: !!qrCodeData,
+            timestamp: new Date().toISOString()
+        }));
     } else {
         res.writeHead(404);
         res.end('Not Found');
     }
 });
 
+// Usa a porta do Railway ou 8080
 const PORT = process.env.PORT || 8080;
+
+// Inicia servidor em 0.0.0.0 para aceitar conexões externas (Railway)
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🌐 Servidor web rodando na porta ${PORT}`);
+    console.log(`🔗 URL: https://bot-de-automo-o-muniz-rifas-production.up.railway.app`);
+    console.log(`📊 Status: http://0.0.0.0:${PORT}/status`);
 });
 
-// Garante que o diretório auth_info existe
+// Garante que o diretório auth_info existe e limpa sessão anterior
 const authPath = path.join(process.cwd(), 'auth_info');
-if (!fs.existsSync(authPath)) {
-    fs.mkdirSync(authPath, { recursive: true });
+if (fs.existsSync(authPath)) {
+    try {
+        fs.rmSync(authPath, { recursive: true, force: true });
+        console.log('🗑️ Sessão anterior removida');
+    } catch (e) {
+        console.log('⚠️ Não foi possível remover sessão anterior');
+    }
 }
+fs.mkdirSync(authPath, { recursive: true });
 
 const config = require('./config/index.js');
 const MessageHandler = require('./handlers/messageHandler.js');
@@ -145,7 +197,8 @@ class WhatsAppBot {
                 browser: ['Bot Menções', 'Chrome', '1.0'],
                 connectTimeoutMs: 60000,
                 defaultQueryTimeoutMs: 60000,
-                keepAliveIntervalMs: 30000
+                keepAliveIntervalMs: 30000,
+                markOnlineOnConnect: true
             });
 
             this.messageHandler = new MessageHandler(this.sock);
@@ -158,7 +211,8 @@ class WhatsAppBot {
                         qrCodeData = await QRCode.toDataURL(qr);
                         currentQR = qr;
                         connectionStatus = 'Aguardando QR';
-                        logger.info('📱 QR Code gerado! Escaneie na URL');
+                        logger.info('📱 QR Code gerado! Acesse: https://bot-de-automo-o-muniz-rifas-production.up.railway.app');
+                        qrcode.generate(qr, { small: true });
                     } catch (err) {
                         logger.error('Erro ao gerar QR Code:', err);
                     }
@@ -168,7 +222,11 @@ class WhatsAppBot {
                     currentQR = null;
                     qrCodeData = null;
                     connectionStatus = 'Desconectado';
-                    const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+                    
+                    const statusCode = lastDisconnect?.error?.output?.statusCode;
+                    const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+                    
+                    logger.info(`Conexão fechada. Código: ${statusCode}`);
                     
                     if (shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
                         this.reconnectAttempts++;
