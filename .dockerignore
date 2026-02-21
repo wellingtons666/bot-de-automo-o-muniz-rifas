@@ -2,9 +2,8 @@
 node_modules
 npm-debug.log
 yarn-error.log
-package-lock.json
 
-# Sessões e caches (nunca incluir no build!)
+# Sessões (NUNA enviar para Docker!)
 auth_info
 session
 sessions
@@ -17,9 +16,6 @@ baileys_auth
 # Logs
 logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
 # Ambiente
 .env
@@ -29,7 +25,6 @@ yarn-error.log*
 # Git
 .git
 .gitignore
-.gitattributes
 README.md
 LICENSE
 
@@ -38,7 +33,6 @@ LICENSE
 .idea
 *.swp
 *.swo
-*~
 
 # OS
 .DS_Store
@@ -49,7 +43,6 @@ test
 tests
 __tests__
 coverage
-.nyc_output
 
 # Temporários
 tmp
@@ -57,11 +50,3 @@ temp
 *.tmp
 *.temp
 .cache
-
-# Outros
-.github
-docs
-examples
-.prettierrc
-.eslintrc
-.eslintignore
