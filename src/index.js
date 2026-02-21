@@ -8,7 +8,12 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const QRCode = require('qrcode');
+const pino = require('pino');
 
+// Logger simples sem problemas
+const logger = pino({ level: 'silent' });
+
+// ============== CONFIGURAÇÃO DE EVASÃO ==============
 const DEVICE_CONFIGS = [
     { name: 'Samsung Galaxy S23 Ultra', os: 'Android 14', version: [2, 3000, 1015901307] },
     { name: 'Samsung Galaxy S22', os: 'Android 13', version: [2, 3000, 1015901307] },
@@ -193,7 +198,6 @@ function cleanSession() {
 
 const config = require('./config/index.js');
 const MessageHandler = require('./handlers/messageHandler.js');
-const logger = require('./utils/logger.js');
 
 class WhatsAppBot {
     constructor() {
@@ -231,7 +235,7 @@ class WhatsAppBot {
             this.sock = makeWASocket({
                 auth: state,
                 printQRInTerminal: false,
-                logger: { level: 'silent' },
+                logger: logger,  // <-- USANDO O LOGGER DIRETO AQUI
                 browser: [this.deviceIdentity.deviceName, this.deviceIdentity.osVersion, this.deviceIdentity.browserVersion],
                 version: version,
                 connectTimeoutMs: 120000,
