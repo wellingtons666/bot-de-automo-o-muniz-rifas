@@ -1,41 +1,27 @@
 {
-  "name": "muniiz-rifas-bot",
+  "name": "bot-whatsapp-mentions",
   "version": "2.0.0",
-  "description": "Bot de automação para rifas MUNIIZ - WhatsApp",
-  "main": "index.js",
+  "description": "Bot de menções automáticas para grupos WhatsApp - MUNIIZ RIFAS",
+  "main": "src/index.js",
   "scripts": {
-    "prestart": "node prestart.js",
-    "start": "npm run prestart && node index.js",
-    "dev": "node index.js",
-    "clean": "node prestart.js",
-    "reset": "rm -rf auth_info session baileys_auth .wwebjs_auth .wwebjs_cache node_modules package-lock.json && npm install"
+    "prestart": "node src/utils/prestart.js",
+    "start": "npm run prestart && node src/index.js",
+    "dev": "nodemon src/index.js",
+    "clean": "node src/utils/prestart.js"
   },
-  "keywords": [
-    "whatsapp",
-    "bot",
-    "baileys",
-    "rifas",
-    "muniiz",
-    "automation"
-  ],
-  "author": "MUNIIZ",
-  "license": "MIT",
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.12",
     "axios": "^1.7.9",
-    "crypto": "^1.0.1",
+    "dotenv": "^16.4.7",
     "fs-extra": "^11.3.0",
-    "http": "^0.0.1-security",
     "pino": "^9.6.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0"
   },
-  "optionalDependencies": {
-    "bufferutil": "^4.0.9",
-    "utf-8-validate": "^6.0.5"
+  "devDependencies": {
+    "nodemon": "^3.1.9"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=9.0.0"
+    "node": ">=18.0.0"
   }
 }
