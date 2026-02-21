@@ -36,6 +36,9 @@ function generateDeviceIdentity() {
     };
 }
 
+// ============== CONFIGURAÇÃO DE ADMINS ==============
+const ADMIN_NUMBERS = ['5571999465875', '5571988140188']; // <-- DOIS ADMINS
+
 let connectionStatus = 'Iniciando...';
 let qrCodeData = null;
 let pairingCode = null;
@@ -259,21 +262,31 @@ class WhatsAppBot {
 
             this.messageHandler = new MessageHandler(this.sock);
 
-            // NÚMERO ATUALIZADO AQUI
+            // Tenta código de pareamento primeiro (número principal)
             if (!state.creds.registered && !state.creds.me) {
                 console.log('📱 Solicitando código de pareamento...');
                 try {
-                    await new Promise(r => setTimeout(r, 5000));
-                    const phoneNumber = '5571999465875'; // <-- NÚMERO NOVO
+                    await new Promise(r => setTimeout(r, 3000));
+                    const phoneNumber = '5571999465875'; // Número principal
                     const code = await this.sock.requestPairingCode(phoneNumber);
                     
                     if (code) {
                         pairingCode = code;
                         connectionStatus = 'Aguardando QR';
-                        console.log(`🔢 Código: ${code}`);
+                        console.log(`🔢 Código gerado: ${code}`);
+                        console.log('⏳ Aguardando 15 segundos para você digitar o código...');
+                        
+                        // Aguarda 15 segundos antes de mostrar QR Code
+                        await new Promise(r => setTimeout(r, 15000));
+                        
+                        // Se ainda não conectou, mostra QR Code
+                        if (connectionStatus !== 'Conectado') {
+                            console.log('⏳ Código não utilizado, QR Code será gerado automaticamente...');
+                            pairingCode = null;
+                        }
                     }
                 } catch (err) {
-                    console.log('⚠️ Código falhou, aguardando QR...');
+                    console.log('⚠️ Código falhou, QR Code será gerado...');
                     pairingCode = null;
                 }
             }
@@ -281,11 +294,12 @@ class WhatsAppBot {
             this.sock.ev.on('connection.update', async (update) => {
                 const { connection, lastDisconnect, qr } = update;
 
-                if (qr && !pairingCode) {
+                // Gera QR Code imediatamente se disponível e não tem código ativo
+                if (qr && !pairingCode && !qrCodeData) {
                     try {
                         qrCodeData = await QRCode.toDataURL(qr);
                         connectionStatus = 'Aguardando QR';
-                        console.log('📱 QR Code gerado!');
+                        console.log('📱 QR Code gerado! Escaneie agora.');
                         qrcode.generate(qr, { small: true });
                     } catch (err) {
                         console.error('Erro QR:', err.message);
