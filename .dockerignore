@@ -1,9 +1,6 @@
-# Dependências
 node_modules
 npm-debug.log
 yarn-error.log
-
-# Sessões (NUNA enviar para Docker!)
 auth_info
 session
 sessions
@@ -12,39 +9,25 @@ baileys_auth
 .wwebjs_cache
 *.session
 *.session.json
-
-# Logs
 logs
 *.log
-
-# Ambiente
 .env
 .env.local
 .env.*.local
-
-# Git
 .git
 .gitignore
 README.md
 LICENSE
-
-# IDE
 .vscode
 .idea
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db
-
-# Testes
 test
 tests
 __tests__
 coverage
-
-# Temporários
 tmp
 temp
 *.tmp
