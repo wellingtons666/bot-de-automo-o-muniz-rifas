@@ -8,164 +8,193 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 
-// Variáveis globais para o servidor web
+// Variáveis globais
 let currentQR = null;
 let connectionStatus = 'Desconectado';
 let qrCodeData = null;
+let pairingCode = null;
 
-// Servidor web para exibir QR Code - CONFIGURADO PARA RAILWAY
+// Servidor web
 const server = http.createServer((req, res) => {
-    // CORS headers para permitir acesso de qualquer origem
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     
     if (req.url === '/') {
         res.writeHead(200, { 
             'Content-Type': 'text/html; charset=utf-8',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
+            'Cache-Control': 'no-cache'
         });
         res.end(`
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Bot WhatsApp - QR Code</title>
+                <title>Bot WhatsApp - Conectar</title>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta http-equiv="refresh" content="2">
+                <meta http-equiv="refresh" content="3">
                 <style>
                     body {
-                        font-family: Arial, sans-serif;
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                         display: flex;
                         flex-direction: column;
                         align-items: center;
                         justify-content: center;
                         min-height: 100vh;
                         margin: 0;
-                        background: #1a1a2e;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                         color: white;
                     }
                     .container {
                         text-align: center;
-                        padding: 20px;
-                        max-width: 500px;
+                        padding: 30px;
+                        background: rgba(255,255,255,0.1);
+                        border-radius: 20px;
+                        backdrop-filter: blur(10px);
+                        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+                        max-width: 450px;
+                        width: 90%;
                     }
-                    h1 { color: #00d9ff; margin-bottom: 10px; font-size: 24px; }
+                    h1 { 
+                        color: #fff; 
+                        margin-bottom: 20px; 
+                        font-size: 28px;
+                        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+                    }
                     .status {
                         padding: 15px 30px;
-                        border-radius: 25px;
+                        border-radius: 50px;
                         margin: 20px 0;
                         font-weight: bold;
                         font-size: 16px;
+                        text-transform: uppercase;
+                        letter-spacing: 1px;
                     }
-                    .status.conectado { background: #00d9ff; color: #1a1a2e; }
+                    .status.conectado { background: #00d26a; }
                     .status.desconectado { background: #ff4757; }
-                    .status.aguardando { background: #ffa502; color: #1a1a2e; }
+                    .status.aguardando { background: #ffa502; color: #333; }
                     #qrcode {
                         background: white;
                         padding: 20px;
                         border-radius: 15px;
                         margin: 20px auto;
-                        width: 300px;
-                        height: 300px;
+                        width: 280px;
+                        height: 280px;
                         display: flex;
                         align-items: center;
                         justify-content: center;
-                        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
                     }
                     #qrcode img {
-                        max-width: 260px;
-                        max-height: 260px;
+                        max-width: 240px;
+                        max-height: 240px;
+                    }
+                    .pairing-code {
+                        background: #00d26a;
+                        color: white;
+                        padding: 20px;
+                        border-radius: 15px;
+                        margin: 20px 0;
+                        font-size: 32px;
+                        font-weight: bold;
+                        letter-spacing: 10px;
+                        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+                        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
                     }
                     .info {
                         margin-top: 20px;
-                        color: #a4b0be;
+                        color: #f0f0f0;
                         font-size: 14px;
-                        line-height: 1.6;
+                        line-height: 1.8;
                     }
                     .loading {
-                        font-size: 16px;
+                        font-size: 18px;
                         color: #666;
                         text-align: center;
+                        padding: 30px;
                     }
                     .warning {
                         background: #ffa502;
-                        color: #1a1a2e;
-                        padding: 10px;
+                        color: #333;
+                        padding: 15px;
                         border-radius: 10px;
                         margin-bottom: 20px;
                         font-weight: bold;
                         font-size: 14px;
                     }
-                    .url-info {
-                        background: #2f3542;
-                        padding: 10px;
-                        border-radius: 8px;
+                    .steps {
+                        text-align: left;
+                        background: rgba(255,255,255,0.1);
+                        padding: 15px;
+                        border-radius: 10px;
                         margin-top: 15px;
-                        font-size: 12px;
-                        color: #70a1ff;
-                        word-break: break-all;
+                    }
+                    .steps p {
+                        margin: 8px 0;
+                        font-size: 13px;
                     }
                 </style>
             </head>
             <body>
                 <div class="container">
-                    <h1>🤖 Bot WhatsApp - Menções</h1>
-                    ${!qrCodeData && connectionStatus !== 'Conectado' ? '<div class="warning">⚠️ Aguardando QR Code...</div>' : ''}
+                    <h1>🤖 Bot de Rifas - WhatsApp</h1>
+                    
+                    ${!qrCodeData && !pairingCode && connectionStatus !== 'Conectado' ? 
+                        '<div class="warning">⚡ Gerando método de conexão...</div>' : ''}
+                    
                     <div class="status ${connectionStatus === 'Conectado' ? 'conectado' : connectionStatus === 'Aguardando QR' ? 'aguardando' : 'desconectado'}">
-                        Status: ${connectionStatus}
+                        ${connectionStatus}
                     </div>
+
+                    ${pairingCode ? `
+                        <div style="margin: 20px 0;">
+                            <p style="font-size: 18px; margin-bottom: 10px;">📱 Código de Pareamento:</p>
+                            <div class="pairing-code">${pairingCode}</div>
+                            <p style="font-size: 12px; margin-top: 10px;">Abra WhatsApp → Configurações → Dispositivos → Link com código</p>
+                        </div>
+                    ` : ''}
+
                     <div id="qrcode">
-                        ${qrCodeData ? `<img src="${qrCodeData}" alt="QR Code WhatsApp">` : '<div class="loading">⏳ Gerando QR Code...<br>Aguarde...</div>'}
+                        ${qrCodeData ? 
+                            `<img src="${qrCodeData}" alt="QR Code">` : 
+                            `<div class="loading">
+                                ${pairingCode ? '⏳ Ou use o código acima' : '⏳ Gerando QR Code...'}
+                            </div>`
+                        }
                     </div>
+
                     <div class="info">
-                        <p>📱 <strong>Como conectar:</strong></p>
-                        <p>1. Abra o WhatsApp no celular</p>
-                        <p>2. Toque em ⋮ → Dispositivos Conectados</p>
-                        <p>3. Toque em "Conectar novo dispositivo"</p>
-                        <p>4. Aponte a câmera para o QR Code</p>
-                        <br>
-                        <p>⏱️ Atualizando a cada 2 segundos</p>
-                    </div>
-                    <div class="url-info">
-                        🌐 ${req.headers.host || 'localhost'}
+                        <div class="steps">
+                            <p><strong>📱 Como conectar:</strong></p>
+                            <p>1. Abra o WhatsApp no celular</p>
+                            <p>2. Toque em ⋮ (menu) → Dispositivos Conectados</p>
+                            <p>3. Escolha: "Conectar novo dispositivo"</p>
+                            <p>4. Escaneie o QR Code ou use o código de 8 dígitos</p>
+                        </div>
+                        <p style="margin-top: 15px; font-size: 11px;">⏱️ Atualizando automaticamente...</p>
                     </div>
                 </div>
             </body>
             </html>
         `);
-    } else if (req.url === '/status') {
-        // Endpoint JSON para verificar status
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-            status: connectionStatus,
-            hasQR: !!qrCodeData,
-            timestamp: new Date().toISOString()
-        }));
     } else {
         res.writeHead(404);
         res.end('Not Found');
     }
 });
 
-// Usa a porta do Railway ou 8080
 const PORT = process.env.PORT || 8080;
-
-// Inicia servidor em 0.0.0.0 para aceitar conexões externas (Railway)
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🌐 Servidor web rodando na porta ${PORT}`);
-    console.log(`🔗 URL: https://bot-de-automo-o-muniz-rifas-production.up.railway.app`);
-    console.log(`📊 Status: http://0.0.0.0:${PORT}/status`);
+    console.log(`🌐 Servidor: http://0.0.0.0:${PORT}`);
+    console.log(`🔗 URL Pública: https://bot-de-automo-o-muniz-rifas-production.up.railway.app`);
 });
 
-// Garante que o diretório auth_info existe e limpa sessão anterior
+// Limpa sessão anterior para forçar nova conexão
 const authPath = path.join(process.cwd(), 'auth_info');
 if (fs.existsSync(authPath)) {
     try {
         fs.rmSync(authPath, { recursive: true, force: true });
-        console.log('🗑️ Sessão anterior removida');
+        console.log('🗑️ Sessão limpa');
     } catch (e) {
-        console.log('⚠️ Não foi possível remover sessão anterior');
+        console.log('⚠️ Erro ao limpar sessão:', e.message);
     }
 }
 fs.mkdirSync(authPath, { recursive: true });
@@ -180,28 +209,72 @@ class WhatsAppBot {
         this.sock = null;
         this.messageHandler = null;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
+        this.maxReconnectAttempts = 10;
     }
 
     async start() {
         try {
-            logger.info('🤖 Iniciando Bot de Menções...');
-            logger.info(`👑 Admin configurado: ${config.ADMIN_NUMBER}`);
+            logger.info('🤖 Iniciando Bot de Rifas...');
+            logger.info(`👑 Admin: ${config.ADMIN_NUMBER}`);
 
             const { state, saveCreds } = await useMultiFileAuthState(authPath);
 
+            // CONFIGURAÇÃO "BOT DE RIFAS" - USA MOBILE EM VEZ DE WEB
             this.sock = makeWASocket({
                 auth: state,
                 printQRInTerminal: true,
-                logger: logger.child({ level: 'warn' }),
-                browser: ['Bot Menções', 'Chrome', '1.0'],
-                connectTimeoutMs: 60000,
+                logger: logger.child({ level: 'silent' }), // Silencia logs excessivos
+                browser: ['Android', 'Chrome', '110.0.5481.154'], // Finge ser Android
+                connectTimeoutMs: 120000, // 2 minutos timeout
                 defaultQueryTimeoutMs: 60000,
                 keepAliveIntervalMs: 30000,
-                markOnlineOnConnect: true
+                markOnlineOnConnect: false, // Não marca online imediatamente
+                syncFullHistory: false, // Não sincroniza histórico completo
+                shouldSyncHistoryMessage: () => false,
+                shouldIgnoreJid: () => false,
+                linkPreviewImageThumbnailWidth: 1920,
+                transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 3000 },
+                patchMessageBeforeSending: (message) => {
+                    const requiresPatch = !!(
+                        message.buttonsMessage ||
+                        message.templateMessage ||
+                        message.listMessage
+                    );
+                    if (requiresPatch) {
+                        message = {
+                            viewOnceMessage: {
+                                message: {
+                                    messageContextInfo: {
+                                        deviceListMetadataVersion: 2,
+                                        deviceListMetadata: {},
+                                    },
+                                    ...message,
+                                },
+                            },
+                        };
+                    }
+                    return message;
+                },
+                getMessage: async () => {
+                    return { conversation: 'hello' };
+                },
             });
 
             this.messageHandler = new MessageHandler(this.sock);
+
+            // SOLICITA CÓDIGO DE PAREAMENTO (método dos bots de rifa)
+            if (!state.creds.registered) {
+                console.log('📱 Solicitando código de pareamento...');
+                const phoneNumber = '5571988140188'; // Seu número
+                try {
+                    const code = await this.sock.requestPairingCode(phoneNumber);
+                    pairingCode = code;
+                    console.log(`🔢 Código de pareamento: ${code}`);
+                    logger.info('Código de pareamento gerado!');
+                } catch (err) {
+                    console.log('⚠️ Erro no código de pareamento:', err.message);
+                }
+            }
 
             this.sock.ev.on('connection.update', async (update) => {
                 const { connection, lastDisconnect, qr } = update;
@@ -211,16 +284,17 @@ class WhatsAppBot {
                         qrCodeData = await QRCode.toDataURL(qr);
                         currentQR = qr;
                         connectionStatus = 'Aguardando QR';
-                        logger.info('📱 QR Code gerado! Acesse: https://bot-de-automo-o-muniz-rifas-production.up.railway.app');
+                        logger.info('📱 QR Code gerado!');
                         qrcode.generate(qr, { small: true });
                     } catch (err) {
-                        logger.error('Erro ao gerar QR Code:', err);
+                        logger.error('Erro QR:', err);
                     }
                 }
 
                 if (connection === 'close') {
                     currentQR = null;
                     qrCodeData = null;
+                    pairingCode = null;
                     connectionStatus = 'Desconectado';
                     
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
@@ -228,21 +302,30 @@ class WhatsAppBot {
                     
                     logger.info(`Conexão fechada. Código: ${statusCode}`);
                     
+                    // Se for erro 405 ou 401, limpa sessão e tenta novamente
+                    if (statusCode === 405 || statusCode === 401) {
+                        logger.info('🔄 Erro de autenticação, limpando sessão...');
+                        if (fs.existsSync(authPath)) {
+                            fs.rmSync(authPath, { recursive: true, force: true });
+                        }
+                    }
+                    
                     if (shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
                         this.reconnectAttempts++;
-                        logger.info(`🔄 Reconectando... Tentativa ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
-                        setTimeout(() => this.start(), 5000);
+                        logger.info(`🔄 Reconectando... ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
+                        setTimeout(() => this.start(), 10000); // Espera 10s antes de reconectar
                     } else {
-                        logger.error('❌ Conexão encerrada.');
+                        logger.error('❌ Máximo de tentativas atingido');
                     }
                 }
 
                 if (connection === 'open') {
                     currentQR = null;
                     qrCodeData = null;
+                    pairingCode = null;
                     connectionStatus = 'Conectado';
                     this.reconnectAttempts = 0;
-                    logger.info('✅ Bot conectado com sucesso!');
+                    logger.info('✅ Bot conectado!');
                 }
             });
 
@@ -257,12 +340,12 @@ class WhatsAppBot {
             });
 
             this.sock.ev.on('error', (error) => {
-                logger.error('Erro na conexão:', error);
+                logger.error('Erro:', error.message);
             });
 
         } catch (error) {
-            logger.error('Erro fatal ao iniciar bot:', error);
-            process.exit(1);
+            logger.error('Erro fatal:', error);
+            setTimeout(() => this.start(), 15000); // Tenta novamente em 15s
         }
     }
 }
@@ -271,9 +354,9 @@ const bot = new WhatsAppBot();
 bot.start();
 
 process.on('uncaughtException', (error) => {
-    logger.error('Exceção não capturada:', error);
+    logger.error('Exceção:', error);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Rejeição não tratada:', reason);
+process.on('unhandledRejection', (reason) => {
+    logger.error('Rejeição:', reason);
 });
