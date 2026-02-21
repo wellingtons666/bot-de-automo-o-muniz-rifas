@@ -1,7 +1,7 @@
 require('dotenv').config();
 
 module.exports = {
-    ADMIN_NUMBER: process.env.ADMIN_NUMBER || '5571988140188',
+    ADMIN_NUMBER: '5571999465875', // <-- ALTERADO AQUI
     BOT_NAME: process.env.BOT_NAME || 'Bot Menções',
     
     AUTO_MENTION_MIN: 3 * 60 * 1000,
