@@ -9,7 +9,6 @@ const fs = require('fs');
 const http = require('http');
 const QRCode = require('qrcode');
 
-// ============== CONFIGURAÇÃO DE EVASÃO ==============
 const DEVICE_CONFIGS = [
     { name: 'Samsung Galaxy S23 Ultra', os: 'Android 14', version: [2, 3000, 1015901307] },
     { name: 'Samsung Galaxy S22', os: 'Android 13', version: [2, 3000, 1015901307] },
@@ -32,7 +31,6 @@ function generateDeviceIdentity() {
     };
 }
 
-// ============== SERVIDOR WEB (OBRIGATÓRIO RAILWAY) ==============
 let connectionStatus = 'Iniciando...';
 let qrCodeData = null;
 let pairingCode = null;
@@ -120,7 +118,6 @@ const server = http.createServer((req, res) => {
                     }
                     .info { margin-top: 20px; color: #f0f0f0; font-size: 14px; line-height: 1.8; }
                     .loading { font-size: 18px; color: #666; padding: 30px; }
-                    .device-info { background: rgba(255,255,255,0.2); padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px; }
                 </style>
             </head>
             <body>
@@ -173,7 +170,6 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`🌐 Servidor web: http://0.0.0.0:${PORT}`);
 });
 
-// ============== LIMPEZA DE SESSÃO ==============
 function cleanSession() {
     const authPath = path.join(process.cwd(), 'auth_info');
     const pathsToClean = [
@@ -195,7 +191,6 @@ function cleanSession() {
     return authPath;
 }
 
-// ============== BOT PRINCIPAL ==============
 const config = require('./config/index.js');
 const MessageHandler = require('./handlers/messageHandler.js');
 const logger = require('./utils/logger.js');
@@ -260,7 +255,6 @@ class WhatsAppBot {
 
             this.messageHandler = new MessageHandler(this.sock);
 
-            // Código de pareamento
             if (!state.creds.registered && !state.creds.me) {
                 console.log('📱 Solicitando código de pareamento...');
                 try {
@@ -279,7 +273,6 @@ class WhatsAppBot {
                 }
             }
 
-            // Eventos de conexão
             this.sock.ev.on('connection.update', async (update) => {
                 const { connection, lastDisconnect, qr } = update;
 
@@ -295,16 +288,13 @@ class WhatsAppBot {
                 }
 
                 if (connection === 'close') {
-                    currentQR = null;
                     qrCodeData = null;
                     pairingCode = null;
                     
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
-                    const reason = lastDisconnect?.error?.output?.payload?.message;
                     
                     console.log(`❌ Conexão fechada. Status: ${statusCode}`);
                     
-                    // Erro 405 - Troca identidade completamente
                     if (statusCode === 405) {
                         connectionStatus = 'Erro 405';
                         console.log('🔄 Erro 405! Nova identidade em 10s...');
@@ -315,7 +305,6 @@ class WhatsAppBot {
                         return;
                     }
                     
-                    // Logout ou ban
                     if (statusCode === DisconnectReason.loggedOut || statusCode === DisconnectReason.forbidden) {
                         console.log('🚫 Sessão encerrada. Limpando...');
                         cleanSession();
@@ -324,7 +313,6 @@ class WhatsAppBot {
                         return;
                     }
                     
-                    // Reconexão normal
                     if (this.reconnectAttempts < this.maxReconnectAttempts) {
                         this.reconnectAttempts++;
                         const delay = Math.min(this.reconnectAttempts * 5000, 30000);
