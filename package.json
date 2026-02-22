@@ -1,21 +1,19 @@
 {
   "name": "muniz-rifas-bot",
   "version": "2.0.0",
-  "description": "Bot WhatsApp para menções automáticas em grupos",
+  "description": "Bot WhatsApp para menções automáticas",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js",
     "clean": "rm -rf .wwebjs_auth node_modules package-lock.json && npm install"
   },
   "dependencies": {
     "whatsapp-web.js": "^1.26.0",
     "qrcode-terminal": "^0.12.0",
     "dotenv": "^16.4.5",
-    "puppeteer": "^21.11.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.3"
+    "puppeteer": "^21.11.0",
+    "mongoose": "^8.0.0",
+    "wwebjs-mongo": "^1.1.0"
   },
   "engines": {
     "node": ">=18.0.0"
