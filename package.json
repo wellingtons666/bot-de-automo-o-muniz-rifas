@@ -2,9 +2,9 @@
   "name": "muniz-rifas-bot",
   "version": "2.0.0",
   "description": "Bot WhatsApp para menções automáticas",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node src/index.js",
     "clean": "rm -rf .wwebjs_auth node_modules package-lock.json && npm install"
   },
   "dependencies": {
