@@ -1,267 +1,223 @@
-const { Client, RemoteAuth } = require('whatsapp-web.js');
-const { MongoStore } = require('wwebjs-mongo');
-const mongoose = require('mongoose');
-const qrcode = require('qrcode-terminal');
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode');
+const express = require('express');
 const fs = require('fs');
-const http = require('http'); // ← ADICIONAR
+const path = require('path');
 require('dotenv').config();
 
-// ==================== SERVIDOR WEB PARA HEALTHCHECK ====================
+const app = express();
+let qrCodeImage = '';
+let isReady = false;
+let botStatus = 'Inicializando...';
+
+// Configuração do cliente WhatsApp
+const client = new Client({
+    authStrategy: new LocalAuth({
+        dataPath: './.wwebjs_auth'
+    }),
+    puppeteer: {
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--disable-gpu',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process',
+            '--disable-background-networking',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-breakpad',
+            '--disable-component-extensions-with-background-pages',
+            '--disable-features=TranslateUI,BlinkGenPropertyTrees',
+            '--disable-ipc-flooding-protection'
+        ]
+    }
+});
+
+// Eventos do WhatsApp
+client.on('qr', async (qr) => {
+    console.log('🔐 QR Code gerado! Escaneie no WhatsApp...');
+    botStatus = 'Aguardando QR Code...';
+    
+    try {
+        qrCodeImage = await qrcode.toDataURL(qr);
+    } catch (err) {
+        console.error('Erro ao gerar QR:', err);
+    }
+});
+
+client.on('ready', () => {
+    console.log('✅ Bot conectado e pronto!');
+    isReady = true;
+    botStatus = 'Bot Online ✅';
+    qrCodeImage = ''; // Limpa QR após conexão
+});
+
+client.on('authenticated', () => {
+    console.log('🔓 Autenticado!');
+    botStatus = 'Autenticado...';
+});
+
+client.on('auth_failure', (msg) => {
+    console.error('❌ Falha na autenticação:', msg);
+    botStatus = 'Falha na autenticação';
+});
+
+client.on('disconnected', (reason) => {
+    console.log('🔌 Bot desconectado:', reason);
+    isReady = false;
+    botStatus = 'Desconectado';
+    // Reconecta automaticamente
+    setTimeout(() => {
+        client.initialize();
+    }, 5000);
+});
+
+// Sistema anti-spam e comandos
+const cooldowns = new Map();
+const mentionCounts = new Map();
+const ADMIN_NUMBER = process.env.ADMIN_NUMBER || '5571988140188';
+const COOLDOWN_MINUTES = parseInt(process.env.COOLDOWN_MINUTES) || 30;
+const MENTION_LIMIT = parseInt(process.env.MENTION_LIMIT) || 3;
+
+function isAdmin(number) {
+    return number.includes(ADMIN_NUMBER);
+}
+
+function checkCooldown(userId) {
+    const lastUse = cooldowns.get(userId);
+    if (!lastUse) return true;
+    
+    const diff = Date.now() - lastUse;
+    const minutes = diff / (1000 * 60);
+    return minutes >= COOLDOWN_MINUTES;
+}
+
+function getRemainingCooldown(userId) {
+    const lastUse = cooldowns.get(userId);
+    if (!lastUse) return 0;
+    
+    const diff = Date.now() - lastUse;
+    const minutes = diff / (1000 * 60);
+    return Math.ceil(COOLDOWN_MINUTES - minutes);
+}
+
+// Handler de mensagens
+client.on('message_create', async (msg) => {
+    // Ignora mensagens do próprio bot
+    if (msg.fromMe) return;
+    
+    const command = msg.body.toLowerCase().trim();
+    const userId = msg.author || msg.from;
+    
+    // Comando UAU - Ativa menções
+    if (command === 'uau') {
+        // Verifica se é admin
+        if (!isAdmin(userId)) {
+            await msg.reply('⛔ Apenas administradores podem usar este comando.');
+            return;
+        }
+        
+        // Verifica cooldown
+        if (!checkCooldown(userId)) {
+            const remaining = getRemainingCooldown(userId);
+            await msg.reply(`⏳ Aguarde ${remaining} minutos para usar o comando novamente.`);
+            return;
+        }
+        
+        // Registra uso
+        cooldowns.set(userId, Date.now());
+        
+        // Obtém membros do grupo
+        const chat = await msg.getChat();
+        if (!chat.isGroup) {
+            await msg.reply('❌ Este comando só funciona em grupos!');
+            return;
+        }
+        
+        await msg.reply('🚀 Iniciando menções automáticas...');
+        
+        // Sistema de menções em lotes
+        const participants = chat.participants;
+        const batchSize = parseInt(process.env.BATCH_SIZE) || 50;
+        const delaySeconds = parseInt(process.env.DELAY_SECONDS) || 10;
+        let mentionCount = 0;
+        
+        for (let i = 0; i < participants.length; i += batchSize) {
+            const batch = participants.slice(i, i + batchSize);
+            const mentions = batch.map(p => p.id._serialized);
+            
+            try {
+                await chat.sendMessage(`🔔 ${batch.map(p => `@${p.id.user}`).join(' ')}`, { mentions });
+                mentionCount += batch.length;
+                
+                if (i + batchSize < participants.length) {
+                    await new Promise(r => setTimeout(r, delaySeconds * 1000));
+                }
+            } catch (err) {
+                console.error('Erro ao mencionar:', err);
+            }
+        }
+        
+        await msg.reply(`✅ Menções concluídas! Total: ${mentionCount} membros.`);
+    }
+});
+
+// Rotas HTTP para monitoramento
+app.get('/', (req, res) => {
+    res.send(`
+        <html>
+            <head>
+                <title>Bot Muniz Rifas</title>
+                <meta http-equiv="refresh" content="10">
+                <style>
+                    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #1a1a1a; color: white; }
+                    .status { padding: 20px; border-radius: 10px; margin: 20px; }
+                    .online { background: #28a745; }
+                    .offline { background: #dc3545; }
+                    .waiting { background: #ffc107; color: black; }
+                    img { max-width: 300px; margin: 20px; }
+                </style>
+            </head>
+            <body>
+                <h1>🤖 Bot Muniz Rifas</h1>
+                <div class="status ${isReady ? 'online' : qrCodeImage ? 'waiting' : 'offline'}">
+                    <h2>Status: ${botStatus}</h2>
+                    ${isReady ? '<p>Bot está funcionando normalmente!</p>' : ''}
+                </div>
+                ${qrCodeImage ? `<h3>Escaneie o QR Code:</h3><img src="${qrCodeImage}" />` : ''}
+                <p>Última atualização: ${new Date().toLocaleString()}</p>
+            </body>
+        </html>
+    `);
+});
+
+app.get('/status', (req, res) => {
+    res.json({
+        status: botStatus,
+        connected: isReady,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Health check para Railway
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+});
+
 const PORT = process.env.PORT || 3000;
 
-const server = http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ 
-        status: 'ok', 
-        service: 'muniz-rifas-bot',
-        timestamp: new Date().toISOString()
-    }));
+// Inicia servidor HTTP primeiro
+app.listen(PORT, () => {
+    console.log(`🌐 Servidor rodando na porta ${PORT}`);
+    console.log(`🔗 Acesse: https://seu-app.railway.app/`);
+    
+    // Depois inicia o bot
+    console.log('🤖 Iniciando bot WhatsApp...');
+    client.initialize().catch(err => {
+        console.error('Erro ao inicializar bot:', err);
+    });
 });
-
-server.listen(PORT, () => {
-    console.log(`🌐 Healthcheck server rodando na porta ${PORT}`);
-});
-// =====================================================================
-
-// Configurações
-const ADMIN_NUMBER = process.env.ADMIN_NUMBER || '5571988140188';
-const CLIENT_ID = process.env.CLIENT_ID || 'muniz-rifas-bot';
-const MONGODB_URI = process.env.MONGODB_URI;
-
-if (!MONGODB_URI) {
-    console.error('❌ ERRO: MONGODB_URI não definida!');
-    process.exit(1);
-}
-
-// Estado do bot
-let isReady = false;
-let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 10;
-
-// Conectar ao MongoDB e iniciar bot
-async function startBot() {
-    try {
-        console.log('🔄 Conectando ao MongoDB...');
-        await mongoose.connect(MONGODB_URI);
-        console.log('✅ MongoDB conectado!');
-
-        const store = new MongoStore({ mongoose: mongoose });
-        
-        const client = new Client({
-            authStrategy: new RemoteAuth({
-                store: store,
-                backupSyncIntervalMs: 300000,
-                clientId: CLIENT_ID
-            }),
-            puppeteer: {
-                headless: true,
-                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--single-process',
-                    '--disable-gpu',
-                    '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process',
-                    '--disable-extensions'
-                ],
-                ignoreDefaultArgs: ['--disable-extensions']
-            },
-            qrMaxRetries: 5,
-            authTimeoutMs: 60000,
-            takeoverOnConflict: true,
-            restartOnAuthFail: true
-        });
-
-        // Evento: QR Code
-        client.on('qr', (qr) => {
-            console.log('📱 Escaneie o QR Code:');
-            qrcode.generate(qr, { small: true });
-            fs.writeFileSync('./last-qr.txt', qr);
-            console.log('📝 QR salvo em last-qr.txt');
-        });
-
-        // Evento: Autenticado
-        client.on('authenticated', () => {
-            console.log('🔐 Bot autenticado!');
-            reconnectAttempts = 0;
-        });
-
-        // Evento: Sessão remota salva
-        client.on('remote_session_saved', () => {
-            console.log('💾 Sessão salva no MongoDB!');
-        });
-
-        // Evento: Falha na autenticação
-        client.on('auth_failure', (msg) => {
-            console.error('❌ Falha na autenticação:', msg);
-        });
-
-        // Evento: Pronto
-        client.on('ready', () => {
-            console.log('✅ Bot está pronto!');
-            isReady = true;
-            reconnectAttempts = 0;
-        });
-
-        // Evento: Desconectado
-        client.on('disconnected', (reason) => {
-            console.warn('⚠️ Desconectado:', reason);
-            isReady = false;
-            
-            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                reconnectAttempts++;
-                console.log(`🔄 Reconectando... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
-                
-                setTimeout(() => {
-                    client.initialize().catch(err => {
-                        console.error('Erro ao reconectar:', err);
-                    });
-                }, 5000 * reconnectAttempts);
-            } else {
-                console.error('❌ Máximo de tentativas atingido.');
-                process.exit(1);
-            }
-        });
-
-        // Sistema anti-spam
-        const cooldowns = new Map();
-        const mentionLimits = new Map();
-        const COOLDOWN_TIME = 30 * 60 * 1000;
-        const MAX_MENTIONS_PER_HOUR = 3;
-        const BATCH_SIZE = 50;
-        const BATCH_DELAY = 10000;
-
-        function isAdmin(number) {
-            return number.replace(/\D/g, '') === ADMIN_NUMBER.replace(/\D/g, '');
-        }
-
-        function checkCooldown(userId) {
-            const now = Date.now();
-            if (cooldowns.has(userId)) {
-                const expiration = cooldowns.get(userId);
-                if (now < expiration) {
-                    return Math.ceil((expiration - now) / 1000 / 60);
-                }
-            }
-            return 0;
-        }
-
-        function checkMentionLimit(userId) {
-            const now = Date.now();
-            if (!mentionLimits.has(userId)) {
-                mentionLimits.set(userId, { count: 0, resetTime: now + 60 * 60 * 1000 });
-                return true;
-            }
-            
-            const limit = mentionLimits.get(userId);
-            if (now > limit.resetTime) {
-                mentionLimits.set(userId, { count: 1, resetTime: now + 60 * 60 * 1000 });
-                return true;
-            }
-            
-            if (limit.count >= MAX_MENTIONS_PER_HOUR) return false;
-            limit.count++;
-            return true;
-        }
-
-        async function mentionAll(chat, text = '') {
-            try {
-                const participants = await chat.participants;
-                const mentions = [];
-                const ids = [];
-                
-                for (const participant of participants) {
-                    mentions.push(participant.id._serialized);
-                    ids.push(participant.id._serialized);
-                }
-                
-                for (let i = 0; i < mentions.length; i += BATCH_SIZE) {
-                    const batch = ids.slice(i, i + BATCH_SIZE);
-                    
-                    await chat.sendMessage(text || '🔔 Notificação!', {
-                        mentions: batch
-                    });
-                    
-                    if (i + BATCH_SIZE < mentions.length) {
-                        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
-                    }
-                }
-                return true;
-            } catch (error) {
-                console.error('Erro ao mencionar:', error);
-                return false;
-            }
-        }
-
-        // Handler de mensagens
-        client.on('message_create', async (msg) => {
-            if (!msg.fromMe && !isReady) return;
-            
-            const chat = await msg.getChat();
-            
-            if (msg.body.toLowerCase() === 'uau') {
-                const sender = await msg.getContact();
-                const senderNumber = sender.number;
-                
-                if (!isAdmin(senderNumber)) {
-                    await msg.reply('⛔ Apenas administradores!');
-                    return;
-                }
-                
-                const cooldownMinutes = checkCooldown(senderNumber);
-                if (cooldownMinutes > 0) {
-                    await msg.reply(`⏳ Aguarde ${cooldownMinutes} minutos`);
-                    return;
-                }
-                
-                if (!checkMentionLimit(senderNumber)) {
-                    await msg.reply('⚠️ Limite de menções atingido');
-                    return;
-                }
-                
-                await msg.reply('🚀 Iniciando menções...');
-                const success = await mentionAll(chat, '🎉 *MUNIZ RIFAS* 🎉\n\nFique atento!');
-                
-                if (success) {
-                    cooldowns.set(senderNumber, Date.now() + COOLDOWN_TIME);
-                    await msg.reply('✅ Menções concluídas!');
-                } else {
-                    await msg.reply('❌ Erro ao mencionar');
-                }
-            }
-        });
-
-        console.log('🚀 Inicializando cliente WhatsApp...');
-        await client.initialize();
-
-    } catch (error) {
-        console.error('💥 Erro fatal:', error);
-        setTimeout(startBot, 10000);
-    }
-}
-
-// Tratamento de erros
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error);
-    setTimeout(startBot, 15000);
-});
-
-// Graceful shutdown
-process.on('SIGINT', async () => {
-    console.log('\n🛑 Encerrando...');
-    await mongoose.connection.close();
-    server.close();
-    process.exit(0);
-});
-
-// Iniciar bot
-startBot();
