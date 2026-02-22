@@ -32,9 +32,11 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
+# Copiar package.json primeiro (para cache de dependências)
 COPY package*.json ./
 RUN npm install
 
+# Copiar todo o código
 COPY . .
 
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
@@ -43,4 +45,4 @@ ENV PORT=3000
 
 EXPOSE 3000
 
-CMD ["node", "index.js"]
+CMD ["node", "src/index.js"]
