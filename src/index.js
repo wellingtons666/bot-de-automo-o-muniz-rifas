@@ -9,164 +9,11 @@ const app = express();
 let qrCodeImage = '';
 let isReady = false;
 let botStatus = 'Inicializando...';
+let client = null;
 
-// Configuração do cliente WhatsApp
-const client = new Client({
-    authStrategy: new LocalAuth({
-        dataPath: './.wwebjs_auth'
-    }),
-    puppeteer: {
-        headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--disable-gpu',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process',
-            '--disable-background-networking',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-breakpad',
-            '--disable-component-extensions-with-background-pages',
-            '--disable-features=TranslateUI,BlinkGenPropertyTrees',
-            '--disable-ipc-flooding-protection'
-        ]
-    }
-});
+// ========== SERVIDOR HTTP (INICIA PRIMEIRO) ==========
+app.use(express.json());
 
-// Eventos do WhatsApp
-client.on('qr', async (qr) => {
-    console.log('🔐 QR Code gerado! Escaneie no WhatsApp...');
-    botStatus = 'Aguardando QR Code...';
-    
-    try {
-        qrCodeImage = await qrcode.toDataURL(qr);
-    } catch (err) {
-        console.error('Erro ao gerar QR:', err);
-    }
-});
-
-client.on('ready', () => {
-    console.log('✅ Bot conectado e pronto!');
-    isReady = true;
-    botStatus = 'Bot Online ✅';
-    qrCodeImage = ''; // Limpa QR após conexão
-});
-
-client.on('authenticated', () => {
-    console.log('🔓 Autenticado!');
-    botStatus = 'Autenticado...';
-});
-
-client.on('auth_failure', (msg) => {
-    console.error('❌ Falha na autenticação:', msg);
-    botStatus = 'Falha na autenticação';
-});
-
-client.on('disconnected', (reason) => {
-    console.log('🔌 Bot desconectado:', reason);
-    isReady = false;
-    botStatus = 'Desconectado';
-    // Reconecta automaticamente
-    setTimeout(() => {
-        client.initialize();
-    }, 5000);
-});
-
-// Sistema anti-spam e comandos
-const cooldowns = new Map();
-const mentionCounts = new Map();
-const ADMIN_NUMBER = process.env.ADMIN_NUMBER || '5571988140188';
-const COOLDOWN_MINUTES = parseInt(process.env.COOLDOWN_MINUTES) || 30;
-const MENTION_LIMIT = parseInt(process.env.MENTION_LIMIT) || 3;
-
-function isAdmin(number) {
-    return number.includes(ADMIN_NUMBER);
-}
-
-function checkCooldown(userId) {
-    const lastUse = cooldowns.get(userId);
-    if (!lastUse) return true;
-    
-    const diff = Date.now() - lastUse;
-    const minutes = diff / (1000 * 60);
-    return minutes >= COOLDOWN_MINUTES;
-}
-
-function getRemainingCooldown(userId) {
-    const lastUse = cooldowns.get(userId);
-    if (!lastUse) return 0;
-    
-    const diff = Date.now() - lastUse;
-    const minutes = diff / (1000 * 60);
-    return Math.ceil(COOLDOWN_MINUTES - minutes);
-}
-
-// Handler de mensagens
-client.on('message_create', async (msg) => {
-    // Ignora mensagens do próprio bot
-    if (msg.fromMe) return;
-    
-    const command = msg.body.toLowerCase().trim();
-    const userId = msg.author || msg.from;
-    
-    // Comando UAU - Ativa menções
-    if (command === 'uau') {
-        // Verifica se é admin
-        if (!isAdmin(userId)) {
-            await msg.reply('⛔ Apenas administradores podem usar este comando.');
-            return;
-        }
-        
-        // Verifica cooldown
-        if (!checkCooldown(userId)) {
-            const remaining = getRemainingCooldown(userId);
-            await msg.reply(`⏳ Aguarde ${remaining} minutos para usar o comando novamente.`);
-            return;
-        }
-        
-        // Registra uso
-        cooldowns.set(userId, Date.now());
-        
-        // Obtém membros do grupo
-        const chat = await msg.getChat();
-        if (!chat.isGroup) {
-            await msg.reply('❌ Este comando só funciona em grupos!');
-            return;
-        }
-        
-        await msg.reply('🚀 Iniciando menções automáticas...');
-        
-        // Sistema de menções em lotes
-        const participants = chat.participants;
-        const batchSize = parseInt(process.env.BATCH_SIZE) || 50;
-        const delaySeconds = parseInt(process.env.DELAY_SECONDS) || 10;
-        let mentionCount = 0;
-        
-        for (let i = 0; i < participants.length; i += batchSize) {
-            const batch = participants.slice(i, i + batchSize);
-            const mentions = batch.map(p => p.id._serialized);
-            
-            try {
-                await chat.sendMessage(`🔔 ${batch.map(p => `@${p.id.user}`).join(' ')}`, { mentions });
-                mentionCount += batch.length;
-                
-                if (i + batchSize < participants.length) {
-                    await new Promise(r => setTimeout(r, delaySeconds * 1000));
-                }
-            } catch (err) {
-                console.error('Erro ao mencionar:', err);
-            }
-        }
-        
-        await msg.reply(`✅ Menções concluídas! Total: ${mentionCount} membros.`);
-    }
-});
-
-// Rotas HTTP para monitoramento
 app.get('/', (req, res) => {
     res.send(`
         <html>
@@ -180,6 +27,7 @@ app.get('/', (req, res) => {
                     .offline { background: #dc3545; }
                     .waiting { background: #ffc107; color: black; }
                     img { max-width: 300px; margin: 20px; }
+                    .logs { background: #333; padding: 15px; border-radius: 5px; text-align: left; max-width: 800px; margin: 20px auto; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; }
                 </style>
             </head>
             <body>
@@ -189,6 +37,10 @@ app.get('/', (req, res) => {
                     ${isReady ? '<p>Bot está funcionando normalmente!</p>' : ''}
                 </div>
                 ${qrCodeImage ? `<h3>Escaneie o QR Code:</h3><img src="${qrCodeImage}" />` : ''}
+                <div class="logs">
+                    <strong>Logs:</strong><br>
+                    ${logs.join('<br>')}
+                </div>
                 <p>Última atualização: ${new Date().toLocaleString()}</p>
             </body>
         </html>
@@ -203,21 +55,189 @@ app.get('/status', (req, res) => {
     });
 });
 
-// Health check para Railway
 app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
 
+const logs = [];
+function log(message) {
+    const timestamp = new Date().toLocaleTimeString();
+    const logMessage = `[${timestamp}] ${message}`;
+    console.log(logMessage);
+    logs.push(logMessage);
+    if (logs.length > 50) logs.shift();
+}
+
 const PORT = process.env.PORT || 3000;
 
-// Inicia servidor HTTP primeiro
-app.listen(PORT, () => {
-    console.log(`🌐 Servidor rodando na porta ${PORT}`);
-    console.log(`🔗 Acesse: https://seu-app.railway.app/`);
+// INICIA SERVIDOR IMEDIATAMENTE
+const server = app.listen(PORT, '0.0.0.0', () => {
+    log(`🌐 Servidor HTTP rodando na porta ${PORT}`);
+    log(`🔗 URL: https://bot-de-automo-o-muniz-rifas-production.up.railway.app/`);
     
-    // Depois inicia o bot
-    console.log('🤖 Iniciando bot WhatsApp...');
-    client.initialize().catch(err => {
-        console.error('Erro ao inicializar bot:', err);
+    // Inicia o bot DEPOIS que o servidor estiver no ar
+    setTimeout(initBot, 2000);
+});
+
+// ========== CONFIGURAÇÃO DO WHATSAPP ==========
+function initBot() {
+    try {
+        log('🤖 Iniciando bot WhatsApp...');
+        botStatus = 'Iniciando Puppeteer...';
+
+        client = new Client({
+            authStrategy: new LocalAuth({
+                dataPath: './.wwebjs_auth'
+            }),
+            puppeteer: {
+                headless: true,
+                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--disable-gpu',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--single-process',
+                    '--disable-background-networking'
+                ],
+                timeout: 60000 // 60 segundos
+            }
+        });
+
+        // Eventos
+        client.on('qr', async (qr) => {
+            log('🔐 QR Code gerado! Escaneie no WhatsApp...');
+            botStatus = 'Aguardando QR Code...';
+            
+            try {
+                qrCodeImage = await qrcode.toDataURL(qr);
+            } catch (err) {
+                log('Erro ao gerar QR: ' + err.message);
+            }
+        });
+
+        client.on('ready', () => {
+            log('✅ Bot conectado e pronto!');
+            isReady = true;
+            botStatus = 'Bot Online ✅';
+            qrCodeImage = '';
+        });
+
+        client.on('authenticated', () => {
+            log('🔓 Autenticado!');
+            botStatus = 'Autenticado...';
+        });
+
+        client.on('auth_failure', (msg) => {
+            log('❌ Falha na autenticação: ' + msg);
+            botStatus = 'Falha na autenticação';
+        });
+
+        client.on('disconnected', (reason) => {
+            log('🔌 Bot desconectado: ' + reason);
+            isReady = false;
+            botStatus = 'Desconectado - Reconectando...';
+            qrCodeImage = '';
+            
+            // Tenta reconectar
+            setTimeout(() => {
+                client.initialize().catch(err => {
+                    log('Erro ao reconectar: ' + err.message);
+                });
+            }, 5000);
+        });
+
+        // Comandos
+        setupCommands();
+
+        // Inicializa
+        client.initialize().catch(err => {
+            log('❌ Erro ao inicializar cliente: ' + err.message);
+            botStatus = 'Erro na inicialização';
+        });
+
+    } catch (error) {
+        log('❌ Erro fatal ao iniciar bot: ' + error.message);
+        botStatus = 'Erro fatal';
+    }
+}
+
+// ========== COMANDOS ==========
+function setupCommands() {
+    const ADMIN_NUMBER = process.env.ADMIN_NUMBER || '5571988140188';
+    const cooldowns = new Map();
+    
+    client.on('message_create', async (msg) => {
+        if (msg.fromMe) return;
+        
+        const command = msg.body.toLowerCase().trim();
+        const userId = msg.author || msg.from;
+        
+        if (command === 'uau') {
+            // Verifica admin
+            if (!userId.includes(ADMIN_NUMBER)) {
+                await msg.reply('⛔ Apenas administradores podem usar este comando.');
+                return;
+            }
+            
+            // Cooldown
+            const lastUse = cooldowns.get(userId);
+            if (lastUse && (Date.now() - lastUse) < 30 * 60 * 1000) {
+                const remaining = Math.ceil((30 * 60 * 1000 - (Date.now() - lastUse)) / 60000);
+                await msg.reply(`⏳ Aguarde ${remaining} minutos.`);
+                return;
+            }
+            
+            cooldowns.set(userId, Date.now());
+            
+            try {
+                const chat = await msg.getChat();
+                if (!chat.isGroup) {
+                    await msg.reply('❌ Este comando só funciona em grupos!');
+                    return;
+                }
+                
+                await msg.reply('🚀 Iniciando menções...');
+                log(`Menções iniciadas por ${userId}`);
+                
+                const participants = chat.participants;
+                const batchSize = 50;
+                let count = 0;
+                
+                for (let i = 0; i < participants.length; i += batchSize) {
+                    const batch = participants.slice(i, i + batchSize);
+                    const mentions = batch.map(p => p.id._serialized);
+                    
+                    await chat.sendMessage(
+                        `🔔 ${batch.map(p => `@${p.id.user}`).join(' ')}`, 
+                        { mentions }
+                    );
+                    count += batch.length;
+                    
+                    if (i + batchSize < participants.length) {
+                        await new Promise(r => setTimeout(r, 10000));
+                    }
+                }
+                
+                await msg.reply(`✅ ${count} membros mencionados!`);
+                log(`Menções concluídas: ${count}`);
+                
+            } catch (err) {
+                log('Erro no comando uau: ' + err.message);
+                await msg.reply('❌ Erro ao executar comando.');
+            }
+        }
+    });
+}
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    log('SIGTERM recebido, encerrando...');
+    server.close(() => {
+        if (client) client.destroy();
+        process.exit(0);
     });
 });
