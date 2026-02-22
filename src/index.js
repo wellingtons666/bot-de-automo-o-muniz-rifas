@@ -10,10 +10,9 @@ let botStatus = 'Inicializando...';
 let client = null;
 const logs = [];
 
-// Configurações - MÚLTIPLOS ADMINS
+// Configurações - APENAS UM ADMIN (novo número)
 const ADMIN_NUMBERS = [
-    process.env.ADMIN_NUMBER || '5571988140188',
-    '557199465875'  // Novo admin adicionado
+    '557199465875'  // Único admin
 ];
 const COOLDOWN_MINUTES = parseInt(process.env.COOLDOWN_MINUTES) || 30;
 const cooldowns = new Map();
@@ -26,7 +25,6 @@ function log(message) {
     if (logs.length > 100) logs.shift();
 }
 
-// CORREÇÃO: Função isAdmin atualizada para múltiplos admins
 function isAdmin(userId) {
     if (!userId) {
         log('⚠️ isAdmin: userId é null/undefined');
@@ -85,7 +83,7 @@ app.get('/', (req, res) => {
                     <h2>Status: ${botStatus}</h2>
                 </div>
                 <div class="admin-list">
-                    <strong>Admins:</strong> ${ADMIN_NUMBERS.join(', ')}
+                    <strong>Admin:</strong> ${ADMIN_NUMBERS.join(', ')}
                 </div>
                 ${qrCodeImage ? `<img src="${qrCodeImage}" style="max-width:250px;" />` : ''}
                 <div class="logs">${recentLogs}</div>
@@ -99,7 +97,7 @@ app.get('/health', (req, res) => res.status(200).send('OK'));
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, '0.0.0.0', () => {
     log(`🌐 Servidor HTTP na porta ${PORT}`);
-    log(`👥 Admins configurados: ${ADMIN_NUMBERS.join(', ')}`);
+    log(`👑 Admin configurado: ${ADMIN_NUMBERS.join(', ')}`);
     setTimeout(initBot, 1000);
 });
 
@@ -145,28 +143,22 @@ function initBot() {
             setTimeout(() => client.initialize().catch(e => log('Erro reconectar: ' + e.message)), 5000);
         });
 
-        // CORREÇÃO: Usar 'message' em vez de 'message_create' para capturar todas as mensagens
         client.on('message', async (msg) => {
-            // Ignora mensagens do próprio bot
             if (msg.fromMe) return;
             
             const body = msg.body || '';
             const command = body.toLowerCase().trim();
             
-            // CORREÇÃO: Identificar corretamente o autor
             let authorId = msg.author || msg.from;
             const chat = await msg.getChat();
             const isGroup = chat.isGroup;
             
-            // Se for grupo, msg.author é quem enviou, msg.from é o grupo
-            // Se for privado, msg.from é quem enviou (e msg.author é undefined ou igual)
             if (isGroup) {
-                authorId = msg.author; // No grupo, author é o usuário real
+                authorId = msg.author;
             } else {
-                authorId = msg.from; // No privado, from é o usuário
+                authorId = msg.from;
             }
             
-            // LOG DETALHADO PARA DEBUG
             log(`\n📩 ====================`);
             log(`💬 Mensagem: "${body.substring(0, 50)}"`);
             log(`👤 De (from): ${msg.from}`);
@@ -193,20 +185,20 @@ function initBot() {
                 return;
             }
             
-            // ========== COMANDO ID (para descobrir seu ID) ==========
+            // ========== COMANDO ID ==========
             if (command === '!id' || command === 'meuid' || command === 'id') {
                 log('🆔 Comando ID de: ' + authorId);
                 await msg.reply(`🆔 *Seu ID:*\n\`${authorId}\`\n\n📱 Número: ${authorId.replace(/@c\.us|@g\.us|@lid/g, '')}`);
                 return;
             }
             
-            // ========== COMANDO MSG (MENÇÕES FORÇADAS) ==========
+            // ========== COMANDO MSG ==========
             if (command === 'msg') {
                 log('🎯 MSG detectado de: ' + authorId);
                 
                 if (!isAdmin(authorId)) {
                     log('❌ Não é admin: ' + authorId);
-                    await msg.reply('⛔ *Acesso negado!*\nSeu ID: `' + authorId + '`\nVocê não está na lista de admins.');
+                    await msg.reply('⛔ *Acesso negado!*\nSeu ID: `' + authorId + '`\nVocê não é admin.');
                     return;
                 }
                 
@@ -241,8 +233,7 @@ function initBot() {
                         return p.id._serialized !== botId && !p.id._serialized.includes('broadcast');
                     });
                     
-                    log(`👥 Total de participantes: ${participants.length}`);
-                    log(`👥 Válidos para menção: ${validParticipants.length}`);
+                    log(`👥 Total: ${participants.length} | Válidos: ${validParticipants.length}`);
                     
                     if (validParticipants.length === 0) {
                         await chat.sendMessage('❌ Nenhum participante válido');
@@ -260,7 +251,7 @@ function initBot() {
                         const messageText = `🔔🔔🔔 *ATENÇÃO RIFAS MUNIZ* 🔔🔔🔔\n\n🎰 *Qual bicho coloco pra você?🤑🤑*\n\n${mentionText}\n\n⚠️ *Você foi mencionado!*`;
                         
                         try {
-                            log(`📤 Enviando lote ${Math.floor(i/batchSize) + 1}: ${batch.length} menções`);
+                            log(`📤 Lote ${Math.floor(i/batchSize) + 1}: ${batch.length} menções`);
                             
                             await chat.sendMessage(messageText, {
                                 mentions: mentions,
@@ -269,7 +260,7 @@ function initBot() {
                             });
                             
                             mentioned += batch.length;
-                            log(`✅ Lote enviado: ${mentioned}/${validParticipants.length}`);
+                            log(`✅ Enviado: ${mentioned}/${validParticipants.length}`);
                             
                             if (i + batchSize < validParticipants.length) {
                                 await new Promise(r => setTimeout(r, 3000));
@@ -281,7 +272,7 @@ function initBot() {
                     }
                     
                     await chat.sendMessage(`✅ *Notificação concluída!*\n📊 ${mentioned} membros alertados\n🎰 *Qual bicho coloco pra você?🤑🤑*`);
-                    log('✅ MSG concluído com sucesso');
+                    log('✅ MSG concluído');
                     
                 } catch (err) {
                     log('❌ Erro fatal em msg: ' + err.message);
@@ -290,13 +281,13 @@ function initBot() {
                 return;
             }
             
-            // ========== COMANDO MSG2 (MODO AGRESSIVO) ==========
+            // ========== COMANDO MSG2 ==========
             if (command === 'msg2') {
                 log('💥 MSG2 detectado de: ' + authorId);
                 
                 if (!isAdmin(authorId)) {
                     log('❌ Não é admin: ' + authorId);
-                    await msg.reply('⛔ *Acesso negado!*\nSeu ID: `' + authorId + '`\nVocê não está na lista de admins.');
+                    await msg.reply('⛔ *Acesso negado!*');
                     return;
                 }
                 
@@ -358,7 +349,7 @@ function initBot() {
                 log('❓ AJUDA solicitada por: ' + authorId);
                 await msg.reply(`🤖 *Bot Muniz Rifas*
 
-📌 *Comandos disponíveis:*
+📌 *Comandos:*
 
 • \`msg\` - Menciona todos (modo normal) *Admin only*
 • \`msg2\` - Menciona todos (modo agressivo) *Admin only*
@@ -366,14 +357,13 @@ function initBot() {
 • \`!id\` ou \`id\` - Mostra seu ID de usuário
 • \`!ajuda\` - Mostra esta mensagem
 
-👑 *Seu status:* ${isAdmin(authorId) ? '✅ ADMIN' : '❌ Usuário comum'}
+👑 *Seu status:* ${isAdmin(authorId) ? '✅ ADMIN' : '❌ Não é admin'}
 🆔 *Seu ID:* \`${authorId}\`
 
 🎰 *Qual bicho coloco pra você?🤑🤑*`);
                 return;
             }
             
-            // Se chegou aqui, não era comando conhecido
             log(`❓ Não é comando: "${command}"`);
         });
 
