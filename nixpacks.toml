@@ -13,3 +13,7 @@ PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium"
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
 NODE_ENV = "production"
 PORT = "3000"
+
+# Desativar healthcheck padrão
+[healthcheck]
+enabled = false
