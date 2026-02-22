@@ -2,7 +2,26 @@ const { Client, RemoteAuth } = require('whatsapp-web.js');
 const { MongoStore } = require('wwebjs-mongo');
 const mongoose = require('mongoose');
 const qrcode = require('qrcode-terminal');
+const fs = require('fs');
+const http = require('http'); // ← ADICIONAR
 require('dotenv').config();
+
+// ==================== SERVIDOR WEB PARA HEALTHCHECK ====================
+const PORT = process.env.PORT || 3000;
+
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+        status: 'ok', 
+        service: 'muniz-rifas-bot',
+        timestamp: new Date().toISOString()
+    }));
+});
+
+server.listen(PORT, () => {
+    console.log(`🌐 Healthcheck server rodando na porta ${PORT}`);
+});
+// =====================================================================
 
 // Configurações
 const ADMIN_NUMBER = process.env.ADMIN_NUMBER || '5571988140188';
@@ -11,7 +30,6 @@ const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
     console.error('❌ ERRO: MONGODB_URI não definida!');
-    console.error('Adicione a variável MONGODB_URI no Railway Dashboard');
     process.exit(1);
 }
 
@@ -32,7 +50,7 @@ async function startBot() {
         const client = new Client({
             authStrategy: new RemoteAuth({
                 store: store,
-                backupSyncIntervalMs: 300000, // Backup a cada 5 min
+                backupSyncIntervalMs: 300000,
                 clientId: CLIENT_ID
             }),
             puppeteer: {
@@ -63,11 +81,8 @@ async function startBot() {
         client.on('qr', (qr) => {
             console.log('📱 Escaneie o QR Code:');
             qrcode.generate(qr, { small: true });
-            
-            // Salvar em arquivo para acesso via logs
-            const fs = require('fs');
             fs.writeFileSync('./last-qr.txt', qr);
-            console.log('📝 QR Code também salvo em last-qr.txt');
+            console.log('📝 QR salvo em last-qr.txt');
         });
 
         // Evento: Autenticado
@@ -93,7 +108,7 @@ async function startBot() {
             reconnectAttempts = 0;
         });
 
-        // Evento: Desconectado com reconexão
+        // Evento: Desconectado
         client.on('disconnected', (reason) => {
             console.warn('⚠️ Desconectado:', reason);
             isReady = false;
@@ -108,8 +123,8 @@ async function startBot() {
                     });
                 }, 5000 * reconnectAttempts);
             } else {
-                console.error('❌ Máximo de tentativas atingido. Reiniciando...');
-                process.exit(1); // Railway vai reiniciar o container
+                console.error('❌ Máximo de tentativas atingido.');
+                process.exit(1);
             }
         });
 
@@ -221,7 +236,7 @@ async function startBot() {
             }
         });
 
-        console.log('🚀 Inicializando cliente...');
+        console.log('🚀 Inicializando cliente WhatsApp...');
         await client.initialize();
 
     } catch (error) {
@@ -244,8 +259,9 @@ process.on('uncaughtException', (error) => {
 process.on('SIGINT', async () => {
     console.log('\n🛑 Encerrando...');
     await mongoose.connection.close();
+    server.close();
     process.exit(0);
 });
 
-// Iniciar
+// Iniciar bot
 startBot();
